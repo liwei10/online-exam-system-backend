@@ -61,7 +61,8 @@ oss:
 
 # Minio本地文件存储服务
 minio:
-  endpoint: http://127.0.0.1:9000 # minio服务地址
+  # endpoint: http://127.0.0.1:9000 # minio服务地址
+  endpoint: http://101.126.8.232:9000 # minio服务地址
   accesskey: admin # minio用户名
   secretKey: Aa112211 # minio密码
   bucket: online-exam #桶名

@@ -58,7 +58,9 @@ public class MinioUtil implements FileService {
 
 
         //文件访问路径
-        String url = endpoint + "/" + bucketName + "/" + fileName;
+        // 先写死地址
+        // String url = endpoint + "/" + bucketName + "/" + fileName;
+        String url = "http://101.126.8.232/online-exam/" + fileName;
 
         // 把上传到MINIO的路径返回
         return url;

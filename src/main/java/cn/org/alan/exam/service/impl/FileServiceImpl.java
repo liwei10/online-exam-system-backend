@@ -27,7 +27,9 @@ public class FileServiceImpl implements IFileService {
 
     @SneakyThrows(IOException.class)
     @Override
-    public Result<String> uploadImage(MultipartFile file) {
+    public Result<String> 
+    uploadImage(MultipartFile file) {
+
         if (!fileService.isImage(Objects.requireNonNull(file.getOriginalFilename()))) {
             throw new ServiceRuntimeException("上传头像到文件不是常用图片格式(png、jpg、jpeg、bmp)");
         }
