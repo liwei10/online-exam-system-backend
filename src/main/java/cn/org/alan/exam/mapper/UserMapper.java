@@ -1,14 +1,12 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.User;
-import cn.org.alan.exam.model.form.count.ClassCountResult;
-import cn.org.alan.exam.model.vo.user.UserVO;
+import java.util.List;
+
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import org.springframework.stereotype.Repository;
 
-
-import java.util.List;
+import cn.org.alan.exam.model.entity.User;
+import cn.org.alan.exam.model.vo.user.UserVO;
 
 /**
  * 用户服务Mapper

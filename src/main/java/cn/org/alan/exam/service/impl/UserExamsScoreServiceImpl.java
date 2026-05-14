@@ -1,8 +1,19 @@
 package cn.org.alan.exam.service.impl;
 
+import java.util.List;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.stereotype.Service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
-import cn.org.alan.exam.mapper.ExamGradeMapper;
 import cn.org.alan.exam.mapper.ExamMapper;
 import cn.org.alan.exam.mapper.UserExamsScoreMapper;
 import cn.org.alan.exam.mapper.UserGradeMapper;
@@ -14,16 +25,6 @@ import cn.org.alan.exam.model.vo.score.UserScoreVO;
 import cn.org.alan.exam.service.IUserExamsScoreService;
 import cn.org.alan.exam.utils.SecurityUtil;
 import cn.org.alan.exam.utils.excel.ExcelUtils;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-
-import org.springframework.stereotype.Service;
-
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletResponse;
-import java.util.List;
 
 /**
  * 成绩管理服务接口实现类

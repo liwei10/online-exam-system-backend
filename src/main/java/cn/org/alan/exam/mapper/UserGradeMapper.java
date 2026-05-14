@@ -1,11 +1,10 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.User;
-import cn.org.alan.exam.model.entity.UserGrade;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+
+import cn.org.alan.exam.model.entity.UserGrade;
 
 /**
  * 教师与班级关联表 Mapper 接口

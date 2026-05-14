@@ -1,10 +1,9 @@
 package cn.org.alan.exam.model.vo.exam;
 
-import cn.org.alan.exam.model.entity.ExamQuAnswer;
+import java.util.List;
+
 import cn.org.alan.exam.model.entity.Option;
 import lombok.Data;
-
-import java.util.List;
 
 /**
  * @Author Alan

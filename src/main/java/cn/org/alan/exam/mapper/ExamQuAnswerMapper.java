@@ -1,13 +1,13 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.ExamQuAnswer;
-import cn.org.alan.exam.model.vo.question.QuestionScoreVO;
-import cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO;
-import cn.org.alan.exam.model.vo.score.QuestionAnalyseVO;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Param;
-
 import java.util.List;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+
+import cn.org.alan.exam.model.entity.ExamQuAnswer;
+import cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO;
+import cn.org.alan.exam.model.vo.question.QuestionScoreVO;
+import cn.org.alan.exam.model.vo.score.QuestionAnalyseVO;
 
 /**
  * 试卷试题回答情况表 Mapper 接口

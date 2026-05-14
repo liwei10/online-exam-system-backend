@@ -1,16 +1,12 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.Exam;
-import cn.org.alan.exam.model.entity.ExamGrade;
-import cn.org.alan.exam.model.vo.exam.ExamGradeListVO;
-import cn.org.alan.exam.model.vo.score.GradeScoreVO;
-import cn.org.alan.exam.model.vo.stat.GradeExamVO;
+import java.util.List;
+
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.apache.ibatis.annotations.Param;
 
-import java.util.List;
+import cn.org.alan.exam.model.entity.ExamGrade;
+import cn.org.alan.exam.model.vo.exam.ExamGradeListVO;
 
 /**
  * 考试与班级关联表 Mapper 接口

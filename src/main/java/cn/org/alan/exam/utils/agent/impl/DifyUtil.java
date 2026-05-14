@@ -1,8 +1,5 @@
 package cn.org.alan.exam.utils.agent.impl;
 
-import cn.hutool.json.JSONObject;
-import cn.org.alan.exam.utils.agent.AIChat;
-import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -12,6 +9,9 @@ import org.apache.http.util.EntityUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+
+import cn.hutool.json.JSONObject;
+import cn.org.alan.exam.utils.agent.AIChat;
 
 /**
  * Dify实现AIChat

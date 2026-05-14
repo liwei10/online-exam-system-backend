@@ -1,12 +1,16 @@
 package cn.org.alan.exam.model.form.exam;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import lombok.Data;
+import java.time.LocalDateTime;
+
+import javax.validation.constraints.Future;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+
 import org.springframework.format.annotation.DateTimeFormat;
 
-import javax.validation.constraints.*;
-import java.time.LocalDateTime;
+import lombok.Data;
 
 /**
  * 试卷更新请求体

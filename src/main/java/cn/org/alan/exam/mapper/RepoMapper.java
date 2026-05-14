@@ -1,16 +1,17 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.Repo;
-import cn.org.alan.exam.model.vo.repo.RepoListVO;
-import cn.org.alan.exam.model.vo.repo.RepoVO;
-import cn.org.alan.exam.model.vo.exercise.ExerciseRepoVO;
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.apache.ibatis.annotations.Param;
-import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import cn.org.alan.exam.model.entity.Repo;
+import cn.org.alan.exam.model.vo.exercise.ExerciseRepoVO;
+import cn.org.alan.exam.model.vo.repo.RepoListVO;
+import cn.org.alan.exam.model.vo.repo.RepoVO;
 
 /**
  * 题库表 Mapper 接口

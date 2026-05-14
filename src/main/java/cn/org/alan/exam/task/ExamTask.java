@@ -1,26 +1,37 @@
 package cn.org.alan.exam.task;
 
-import cn.org.alan.exam.common.result.Result;
-import cn.org.alan.exam.mapper.*;
-import cn.org.alan.exam.model.entity.*;
-import cn.org.alan.exam.model.enums.ExamState;
-import cn.org.alan.exam.model.vo.exam.ExamQuDetailVO;
-import cn.org.alan.exam.service.IAutoScoringService;
-import cn.org.alan.exam.utils.ClassTokenGenerator;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.annotation.Resource;
+
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+
+import cn.org.alan.exam.common.result.Result;
+import cn.org.alan.exam.mapper.CertificateUserMapper;
+import cn.org.alan.exam.mapper.ExamMapper;
+import cn.org.alan.exam.mapper.ExamQuAnswerMapper;
+import cn.org.alan.exam.mapper.ExamQuestionMapper;
+import cn.org.alan.exam.mapper.UserBookMapper;
+import cn.org.alan.exam.mapper.UserExamsScoreMapper;
+import cn.org.alan.exam.model.entity.CertificateUser;
+import cn.org.alan.exam.model.entity.Exam;
+import cn.org.alan.exam.model.entity.ExamQuAnswer;
+import cn.org.alan.exam.model.entity.ExamQuestion;
+import cn.org.alan.exam.model.entity.UserBook;
+import cn.org.alan.exam.model.entity.UserExamsScore;
+import cn.org.alan.exam.model.enums.ExamState;
+import cn.org.alan.exam.model.vo.exam.ExamQuDetailVO;
+import cn.org.alan.exam.service.IAutoScoringService;
+import cn.org.alan.exam.utils.ClassTokenGenerator;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 说明：

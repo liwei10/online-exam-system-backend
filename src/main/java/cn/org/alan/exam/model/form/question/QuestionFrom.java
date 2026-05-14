@@ -1,17 +1,16 @@
 package cn.org.alan.exam.model.form.question;
 
-import cn.org.alan.exam.common.group.QuestionGroup;
-import cn.org.alan.exam.model.entity.Option;
-
-import lombok.Data;
+import java.time.LocalDateTime;
+import java.util.List;
 
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
+
+import cn.org.alan.exam.common.group.QuestionGroup;
+import cn.org.alan.exam.model.entity.Option;
+import lombok.Data;
 
 /**
  * 试卷请求体

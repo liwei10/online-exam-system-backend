@@ -1,12 +1,12 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.Grade;
-import cn.org.alan.exam.model.vo.grade.GradeVO;
+import java.util.List;
+
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import cn.org.alan.exam.model.entity.Grade;
+import cn.org.alan.exam.model.vo.grade.GradeVO;
 
 /**
  * 班级表 Mapper 接口

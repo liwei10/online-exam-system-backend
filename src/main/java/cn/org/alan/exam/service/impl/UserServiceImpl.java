@@ -1,40 +1,40 @@
 package cn.org.alan.exam.service.impl;
 
-import cn.org.alan.exam.common.exception.ServiceRuntimeException;
-import cn.org.alan.exam.common.result.Result;
-import cn.org.alan.exam.converter.UserConverter;
-import cn.org.alan.exam.mapper.*;
-import cn.org.alan.exam.model.entity.Grade;
-import cn.org.alan.exam.model.entity.User;
-import cn.org.alan.exam.model.form.user.UserForm;
-import cn.org.alan.exam.model.vo.user.UserVO;
-import cn.org.alan.exam.service.IFileService;
-import cn.org.alan.exam.service.IQuestionService;
-import cn.org.alan.exam.service.IUserService;
-import cn.org.alan.exam.utils.DateTimeUtil;
-import cn.org.alan.exam.utils.SecurityUtil;
-import cn.org.alan.exam.utils.excel.ExcelUtils;
-import cn.org.alan.exam.utils.file.FileService;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import cn.org.alan.exam.common.exception.ServiceRuntimeException;
+import cn.org.alan.exam.common.result.Result;
+import cn.org.alan.exam.converter.UserConverter;
+import cn.org.alan.exam.mapper.GradeMapper;
+import cn.org.alan.exam.mapper.UserGradeMapper;
+import cn.org.alan.exam.mapper.UserMapper;
+import cn.org.alan.exam.model.entity.Grade;
+import cn.org.alan.exam.model.entity.User;
+import cn.org.alan.exam.model.form.user.UserForm;
+import cn.org.alan.exam.model.vo.user.UserVO;
+import cn.org.alan.exam.service.IFileService;
+import cn.org.alan.exam.service.IUserService;
+import cn.org.alan.exam.utils.DateTimeUtil;
+import cn.org.alan.exam.utils.SecurityUtil;
+import cn.org.alan.exam.utils.excel.ExcelUtils;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**

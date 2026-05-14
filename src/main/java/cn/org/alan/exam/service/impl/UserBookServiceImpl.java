@@ -1,29 +1,38 @@
 package cn.org.alan.exam.service.impl;
 
-import cn.org.alan.exam.common.exception.ServiceRuntimeException;
-import cn.org.alan.exam.common.result.Result;
-import cn.org.alan.exam.converter.UserBookConverter;
-import cn.org.alan.exam.mapper.ExamQuAnswerMapper;
-import cn.org.alan.exam.mapper.OptionMapper;
-import cn.org.alan.exam.mapper.QuestionMapper;
-import cn.org.alan.exam.mapper.UserBookMapper;
-import cn.org.alan.exam.model.entity.*;
-import cn.org.alan.exam.model.form.userbook.ReUserBookForm;
-import cn.org.alan.exam.model.vo.userbook.*;
-import cn.org.alan.exam.service.IOptionService;
-import cn.org.alan.exam.service.IQuestionService;
-import cn.org.alan.exam.service.IUserBookService;
-import cn.org.alan.exam.utils.SecurityUtil;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import javax.annotation.Resource;
+
+import org.springframework.stereotype.Service;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
-import java.util.*;
-import java.util.stream.Collectors;
+import cn.org.alan.exam.common.exception.ServiceRuntimeException;
+import cn.org.alan.exam.common.result.Result;
+import cn.org.alan.exam.converter.UserBookConverter;
+import cn.org.alan.exam.mapper.OptionMapper;
+import cn.org.alan.exam.mapper.QuestionMapper;
+import cn.org.alan.exam.mapper.UserBookMapper;
+import cn.org.alan.exam.model.entity.Option;
+import cn.org.alan.exam.model.entity.Question;
+import cn.org.alan.exam.model.entity.UserBook;
+import cn.org.alan.exam.model.form.userbook.ReUserBookForm;
+import cn.org.alan.exam.model.vo.userbook.AddBookAnswerVO;
+import cn.org.alan.exam.model.vo.userbook.BookOneQuVO;
+import cn.org.alan.exam.model.vo.userbook.ReUserExamBookVO;
+import cn.org.alan.exam.model.vo.userbook.UserPageBookVO;
+import cn.org.alan.exam.service.IOptionService;
+import cn.org.alan.exam.service.IQuestionService;
+import cn.org.alan.exam.service.IUserBookService;
+import cn.org.alan.exam.utils.SecurityUtil;
 
 /**
  * 错题本服务实现类

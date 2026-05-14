@@ -1,13 +1,13 @@
 package cn.org.alan.exam.utils;
 
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lionsoul.ip2region.xdb.Searcher;
-import org.springframework.stereotype.Component;
-
-import javax.servlet.http.HttpServletRequest;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 public class IPUtils {
 

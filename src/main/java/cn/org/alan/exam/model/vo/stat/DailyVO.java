@@ -1,9 +1,8 @@
 package cn.org.alan.exam.model.vo.stat;
 
-import com.baomidou.mybatisplus.annotation.TableField;
-import lombok.Data;
-
 import java.time.LocalDate;
+
+import lombok.Data;
 
 /**
  * @Author Alan
