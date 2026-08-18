@@ -38,6 +38,8 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
     private UserMapper userMapper;
     @Resource
     private UserGradeMapper userGradeMapper;
+    @Resource
+    private GradeExerciseMapper gradeExerciseMapper;
 
     @Override
     @Transactional
@@ -80,6 +82,8 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         }
         // 逻辑删除教师与班级的关联
         userGradeMapper.deleteById(gradeId);
+        // 删除班级与题库的刷题关联
+        gradeExerciseMapper.deleteByGradeId(gradeId);
         return Result.success("删除成功");
     }
 

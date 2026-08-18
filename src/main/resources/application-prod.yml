@@ -1,3 +1,9 @@
+/*
+ * @Author: liwei02517@51shebao.com
+ * @Date: 2025-10-04 10:55:55
+ * @Description: 
+ * (C) Copyright 2026, 51shebao Corporation Limited.
+ */
 server:
   port: 8080 # 允许端口号
 spring:
@@ -8,7 +14,7 @@ spring:
     allow-circular-references: true
   # mysql配置
   datasource:
-    url: jdbc:mysql://101.126.8.232:3306/db_exam?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    url: jdbc:mysql://124.221.113.73:3306/db_exam?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     username: root
     password: fjndhww198126
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,7 +22,7 @@ spring:
 #  data:
   redis:
     database: 0
-    host: 101.126.8.232
+    host: 124.221.113.73
     port: 6379
     password: Ma12TgYFOgSHtjoPhTK4d78oHbdsRZm6
     timeout: 10s

@@ -60,10 +60,13 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     private ExerciseConverter exerciseConverter;
     @Resource
     private ExerciseRecordMapper exerciseRecordMapper;
+    @Resource
+    private GradeExerciseMapper gradeExerciseMapper;
 
 
     @Override
     public Result<List<QuestionSheetVO>> getQuestionSheet(Integer repoId, Integer quType) {
+        assertStudentCanExerciseRepo(repoId);
         List<QuestionSheetVO> list = questionMapper.selectQuestionSheet(repoId, quType, SecurityUtil.getUserId());
         return Result.success("获取获取试题答题卡列表成功", list);
     }
@@ -388,6 +391,7 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     @Override
     @Transactional
     public Result<QuestionVO> fillAnswer(ExerciseFillAnswerFrom exerciseFillAnswerFrom) {
+        assertStudentCanExerciseRepo(exerciseFillAnswerFrom.getRepoId());
         ExerciseRecord exerciseRecord = exerciseConverter.fromToEntity(exerciseFillAnswerFrom);
         //默认用户回答正确
         boolean flag = true;
@@ -479,11 +483,16 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     @Override
     public Result<QuestionVO> getSingle(Integer id) {
         QuestionVO questionVO = questionMapper.selectDetail(id);
+        if (questionVO == null || questionVO.getRepoId() == null) {
+            throw new ServiceRuntimeException("试题不存在");
+        }
+        assertStudentCanExerciseRepo(questionVO.getRepoId());
         return Result.success("查询单题成功", questionVO);
     }
 
     @Override
     public Result<AnswerInfoVO> getAnswerInfo(Integer repoId, Integer quId) {
+        assertStudentCanExerciseRepo(repoId);
         QuestionVO questionVO = questionMapper.selectSingle(quId);
         AnswerInfoVO answerInfoVO = exerciseConverter.quVOToAnswerInfoVO(questionVO);
         LambdaQueryWrapper<ExerciseRecord> exerciseRecordLambdaQueryWrapper = new LambdaQueryWrapper<ExerciseRecord>()
@@ -495,5 +504,22 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         return exerciseRecord.getIsRight() == 1 ?
                 Result.success("回答正确", answerInfoVO) : Result.success("回答错误", answerInfoVO);
 
+    }
+
+    /**
+     * 校验当前学生所在班级是否绑定了该题库，且题库已开启刷题
+     */
+    private void assertStudentCanExerciseRepo(Integer repoId) {
+        if (repoId == null) {
+            throw new ServiceRuntimeException("题库不存在");
+        }
+        Integer gradeId = SecurityUtil.getGradeId();
+        if (gradeId == null) {
+            throw new ServiceRuntimeException("请先加入班级后再刷题");
+        }
+        int count = gradeExerciseMapper.countStudentRepoAccess(repoId, gradeId);
+        if (count < 1) {
+            throw new ServiceRuntimeException("无权刷该题库");
+        }
     }
 }

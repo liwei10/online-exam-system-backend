@@ -2,4 +2,56 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.org.alan.exam.mapper.GradeExerciseMapper">
 
+    <!-- 添加题库和班级关系 -->
+    <insert id="addRepoGrade">
+        insert into t_grade_exercise (repo_id, grade_id, user_id, create_time)
+        VALUES
+        <foreach collection="gradeIdList" item="gradeId" separator=",">
+            (#{repoId}, #{gradeId}, #{userId}, now())
+        </foreach>
+    </insert>
+
+    <!-- 删除题库班级关系 -->
+    <delete id="delRepoGrade">
+        delete from t_grade_exercise
+        where repo_id = #{repoId}
+    </delete>
+
+    <!-- 删除班级下的题库关联 -->
+    <delete id="deleteByGradeId">
+        delete from t_grade_exercise
+        where grade_id = #{gradeId}
+    </delete>
+
+    <!-- 获得题库关联的班级id -->
+    <select id="getGradeList" resultType="java.lang.Integer">
+        select grade_id from t_grade_exercise where repo_id = #{repoId}
+    </select>
+
+    <!-- 获得班级关联的题库id -->
+    <select id="getRepoIdList" resultType="java.lang.Integer">
+        select repo_id from t_grade_exercise where grade_id = #{gradeId}
+    </select>
+
+    <!-- 按题库ID批量查询关联 -->
+    <select id="selectByRepoIds" resultType="cn.org.alan.exam.model.entity.GradeExercise">
+        select repo_id, grade_id
+        from t_grade_exercise
+        where repo_id in
+        <foreach collection="repoIds" item="repoId" open="(" separator="," close=")">
+            #{repoId}
+        </foreach>
+    </select>
+
+    <!-- 学生是否有权刷该题库 -->
+    <select id="countStudentRepoAccess" resultType="int">
+        select count(1)
+        from t_grade_exercise ge
+        join t_repo r on r.id = ge.repo_id
+        where ge.repo_id = #{repoId}
+          and ge.grade_id = #{gradeId}
+          and r.is_deleted = 0
+          and r.is_exercise = 1
+    </select>
+
 </mapper>

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * @Author WeiJin
@@ -31,4 +32,6 @@ public class RepoVO {
     private String categoryName;
     // 题目数量
     private Integer questionCount;
+    // 绑定的班级ID列表
+    private List<Integer> gradeIds;
 }

@@ -38,16 +38,16 @@ public interface RepoMapper extends BaseMapper<Repo> {
     /**
      * 分页获取可刷题库列表
      *
-     * @param page     分页信息
-     * @param title    题库名
-     * @param userList 用户Id集
+     * @param page       分页信息
+     * @param title      题库名
+     * @param gradeId    学生班级ID
      * @param categoryId 分类ID
      * @return 结果
      */
-    IPage<ExerciseRepoVO> selectRepo(IPage<ExerciseRepoVO> page,
-                                     String title, 
-                                     List<Integer> userList,
-                                     Integer categoryId);
+    IPage<ExerciseRepoVO> selectRepo(@Param("page") IPage<ExerciseRepoVO> page,
+                                     @Param("title") String title,
+                                     @Param("gradeId") Integer gradeId,
+                                     @Param("categoryId") Integer categoryId);
 
     /**
      * 查询题库列表

@@ -2,7 +2,7 @@ package cn.org.alan.exam.controller;
 
 
 import cn.org.alan.exam.common.result.Result;
-import cn.org.alan.exam.model.entity.Repo;
+import cn.org.alan.exam.model.form.repo.RepoForm;
 import cn.org.alan.exam.model.vo.repo.RepoListVO;
 import cn.org.alan.exam.model.vo.repo.RepoVO;
 import cn.org.alan.exam.service.IRepoService;
@@ -35,28 +35,27 @@ public class RepoController {
     /**
      * 添加题库，只有教师和管理员可以添加题库
      *
-     * @param repo 添加题库的参数
+     * @param repoForm 添加题库的参数
      * @return 返回响应结果
      */
     @PostMapping
     @ApiOperation("添加题库")
     @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
-    public Result<String> addRepo(@Validated @RequestBody Repo repo) {
-        // 从token获取用户id，放入创建人id属性
-        return iRepoService.addRepo(repo);
+    public Result<String> addRepo(@Validated @RequestBody RepoForm repoForm) {
+        return iRepoService.addRepo(repoForm);
     }
 
     /**
      * 修改题库
      *
-     * @param repo 传递参数
+     * @param repoForm 传递参数
      * @return 返回响应
      */
     @ApiOperation("修改题库")
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
-    public Result<String> updateRepo(@Validated @RequestBody Repo repo, @PathVariable("id") Integer id) {
-        return iRepoService.updateRepo(repo, id);
+    public Result<String> updateRepo(@Validated @RequestBody RepoForm repoForm, @PathVariable("id") Integer id) {
+        return iRepoService.updateRepo(repoForm, id);
     }
 
     /**

@@ -2,6 +2,7 @@ package cn.org.alan.exam.service;
 
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.entity.Repo;
+import cn.org.alan.exam.model.form.repo.RepoForm;
 import cn.org.alan.exam.model.vo.repo.RepoListVO;
 import cn.org.alan.exam.model.vo.repo.RepoVO;
 import cn.org.alan.exam.model.vo.exercise.ExerciseRepoVO;
@@ -21,19 +22,19 @@ public interface IRepoService extends IService<Repo> {
     /**
      * 添加题库
      *
-     * @param repo 参数
+     * @param repoForm 参数
      * @return 返回
      */
-    Result<String> addRepo(Repo repo);
+    Result<String> addRepo(RepoForm repoForm);
 
     /**
      * 修改题库
      *
-     * @param repo 修改内容
-     * @param id   路径参数题库id
+     * @param repoForm 修改内容
+     * @param id       路径参数题库id
      * @return 返回响应结果
      */
-    Result<String> updateRepo(Repo repo, Integer id);
+    Result<String> updateRepo(RepoForm repoForm, Integer id);
 
     /**
      * 根据题库id删除题库 并把试题所属题库清空
