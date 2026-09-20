@@ -43,4 +43,20 @@ public class FileServiceImpl implements IFileService {
         return Result.success("图片上传成功", url);
     }
 
+    @SneakyThrows(IOException.class)
+    @Override
+    public Result<String> uploadAudio(MultipartFile file) {
+        if (!fileService.isAudio(Objects.requireNonNull(file.getOriginalFilename()))) {
+            throw new ServiceRuntimeException("音频仅支持mp3格式");
+        }
+        if (fileService.isAudioOverSize(file)) {
+            throw new ServiceRuntimeException("音频大小不能超过10MB");
+        }
+        String url = fileService.upload(file);
+        if (StringUtils.isBlank(url)) {
+            throw new ServiceRuntimeException("音频上传失败,url地址没有返回");
+        }
+        return Result.success("音频上传成功", url);
+    }
+
 }

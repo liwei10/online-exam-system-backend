@@ -394,6 +394,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         Question quById = questionService.getById(quId);
         // 基本信息
         examQuDetailVO.setImage(quById.getImage());
+        examQuDetailVO.setAudio(quById.getAudio());
         examQuDetailVO.setContent(quById.getContent());
         examQuDetailVO.setQuType(quById.getQuType());
         // 答案列表
@@ -475,6 +476,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             ExamQuCollectVO examQuCollectVO = new ExamQuCollectVO();
             // 设置标题
             examQuCollectVO.setTitle(temp.getContent());
+            examQuCollectVO.setImage(temp.getImage());
+            examQuCollectVO.setAudio(temp.getAudio());
             examQuCollectVO.setQuType(temp.getQuType());
             // 设置题目ID
             examQuCollectVO.setId(temp.getId());
@@ -818,6 +821,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             ExamRecordDetailVO examRecordDetailVO = new ExamRecordDetailVO();
             // 设置标题
             examRecordDetailVO.setImage(temp.getImage());
+            examRecordDetailVO.setAudio(temp.getAudio());
             examRecordDetailVO.setTitle(temp.getContent());
             examRecordDetailVO.setQuType(temp.getQuType());
             // 设置分析

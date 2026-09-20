@@ -11,6 +11,9 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
@@ -77,12 +80,22 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 // 除了上述允许匿名访问的路径外，其他任何请求都暂时允许访问（测试用）
                 .anyRequest().permitAll();
 
-        // 配置异常处理器，当用户访问没有权限的资源时，会调用该处理器进行处理
+        // 未登录返回 401，已登录但无权限返回 403
         http.exceptionHandling()
-                .accessDeniedHandler((request, response, accessDeniedException) ->
-                        // 使用响应体封装工具类将错误信息封装成特定的结果返回给客户端
-                        responseUtil.response(response, Result.failed("你没有该资源的访问权限"))
-                );
+                .authenticationEntryPoint((request, response, authException) ->
+                        responseUtil.response(response, Result.failed("登录已过期，请重新登录"), 401)
+                )
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                    boolean anonymous = authentication == null
+                            || !authentication.isAuthenticated()
+                            || authentication instanceof AnonymousAuthenticationToken;
+                    if (anonymous) {
+                        responseUtil.response(response, Result.failed("登录已过期，请重新登录"), 401);
+                    } else {
+                        responseUtil.response(response, Result.failed("你没有该资源的访问权限"), 403);
+                    }
+                });
 
         // 禁用 Spring Security 自带的基于表单的登录页面
         http.formLogin().disable();

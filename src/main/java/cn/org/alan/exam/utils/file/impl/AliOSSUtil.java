@@ -77,6 +77,12 @@ public class AliOSSUtil implements FileService {
         return Arrays.asList(lastnames).contains(lastName);
     }
 
+    @Override
+    public boolean isAudio(String filename) {
+        String lastName = filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
+        return "mp3".equals(lastName);
+    }
+
     /**
      * 判断文件是否大于10MB
      *
@@ -85,6 +91,11 @@ public class AliOSSUtil implements FileService {
      */
     @Override
     public boolean isOverSize(MultipartFile file) {
+        return file.getSize() > 10 * 1024 * 1024;
+    }
+
+    @Override
+    public boolean isAudioOverSize(MultipartFile file) {
         return file.getSize() > 10 * 1024 * 1024;
     }
 }

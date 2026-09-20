@@ -136,4 +136,17 @@ public class QuestionController {
     public Result<String> uploadImage(@RequestPart("file") MultipartFile file) {
         return fileService.uploadImage(file);
     }
+
+    /**
+     * 上传试题音频
+     *
+     * @param file 文件
+     * @return 返回上传后的地址
+     */
+    @ApiOperation("上传音频")
+    @PostMapping("/uploadAudio")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<String> uploadAudio(@RequestPart("file") MultipartFile file) {
+        return fileService.uploadAudio(file);
+    }
 }

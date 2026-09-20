@@ -46,7 +46,12 @@ public class MinioUtil implements FileService {
         try {
             MinioClient client = new MinioClient(endpoint, accessKey, accessKeySecret);
 
-            client.putObject(bucketName, fileName, inputStream, new PutObjectOptions(inputStream.available(), -1));
+            PutObjectOptions options = new PutObjectOptions(inputStream.available(), -1);
+            String contentType = file.getContentType();
+            if (contentType != null && !contentType.isEmpty()) {
+                options.setContentType(contentType);
+            }
+            client.putObject(bucketName, fileName, inputStream, options);
         } catch (Exception e) {
             // 打印异常
             e.printStackTrace();
@@ -79,8 +84,14 @@ public class MinioUtil implements FileService {
         return Arrays.asList(lastnames).contains(lastName);
     }
 
+    @Override
+    public boolean isAudio(String filename) {
+        String lastName = filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
+        return "mp3".equals(lastName);
+    }
+
     /**
-     * 判断文件是否大于50KB
+     * 判断文件是否大于20MB
      *
      * @param file 文件
      * @return 结果
@@ -88,5 +99,10 @@ public class MinioUtil implements FileService {
     @Override
     public boolean isOverSize(MultipartFile file) {
         return file.getSize() > 20 * 1024 * 1024;
+    }
+
+    @Override
+    public boolean isAudioOverSize(MultipartFile file) {
+        return file.getSize() > 10 * 1024 * 1024;
     }
 }

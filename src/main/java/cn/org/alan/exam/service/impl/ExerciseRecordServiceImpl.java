@@ -117,6 +117,7 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
             ExamRecordDetailVO examRecordDetailVO = new ExamRecordDetailVO();
             // 设置标题
             examRecordDetailVO.setImage(temp.getImage());
+            examRecordDetailVO.setAudio(temp.getAudio());
             examRecordDetailVO.setTitle(temp.getContent());
             examRecordDetailVO.setQuType(temp.getQuType());
             // 设置分析
@@ -272,6 +273,7 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         for (Question temp : questions1) {
             ExerciseRecordDetailVO exerciseRecordDetailVO = new ExerciseRecordDetailVO();
             exerciseRecordDetailVO.setImage(temp.getImage());
+            exerciseRecordDetailVO.setAudio(temp.getAudio());
             exerciseRecordDetailVO.setTitle(temp.getContent());
             exerciseRecordDetailVO.setAnalyse(temp.getAnalysis());
             exerciseRecordDetailVO.setQuType(temp.getQuType());

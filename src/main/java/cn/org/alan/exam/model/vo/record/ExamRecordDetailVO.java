@@ -22,6 +22,10 @@ public class ExamRecordDetailVO {
      */
     private String image;
     /**
+     * 题干音频
+     */
+    private String audio;
+    /**
      * 选项
      */
     private List<Option> option;

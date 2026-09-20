@@ -21,6 +21,10 @@ public class ExamQuCollectVO {
      */
     private String image;
     /**
+     * 音频
+     */
+    private String audio;
+    /**
      * 题干
      */
     private String title;

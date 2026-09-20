@@ -3,6 +3,8 @@ package cn.org.alan.exam.filter;
 import cn.org.alan.exam.model.entity.User;
 import cn.org.alan.exam.utils.security.SysUserDetails;
 import cn.org.alan.exam.utils.JwtUtil;
+import cn.org.alan.exam.utils.ResponseUtil;
+import cn.org.alan.exam.common.result.Result;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javax.annotation.Resource;
@@ -46,6 +48,9 @@ public class VerifyTokenFilter extends OncePerRequestFilter {
     @Resource
     private ObjectMapper objectMapper;
 
+    @Resource
+    private ResponseUtil responseUtil;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -54,9 +59,7 @@ public class VerifyTokenFilter extends OncePerRequestFilter {
 
         // 判断是否为空
         if (StringUtils.isBlank(token)) {
-            // throw new RuntimeException("缺少有效的 Token，请先登录！");
             filterChain.doFilter(request, response);
-            // responseUtil.response(response, Result.failed("Authorization为空，请先登录"), 401);
             return;
         }
 
@@ -67,21 +70,19 @@ public class VerifyTokenFilter extends OncePerRequestFilter {
         // 从Redis中获取存储的JWT
         String sessionId = request.getSession().getId();
         String storedToken = stringRedisTemplate.opsForValue().get("token:" + sessionId);
-        if (StringUtils.isBlank(storedToken) ||!token.equals(storedToken)) {
-            filterChain.doFilter(request, response);
-            // responseUtil.response(response, Result.failed("token无效，请重新登录"), 401);
+        if (StringUtils.isBlank(storedToken) || !token.equals(storedToken)) {
+            rejectIfProtected(request, response, filterChain);
             return;
         }
         // 验证并尝试续签 Token
         String refreshedToken = jwtUtil.verifyAndRefreshToken(token);
         if (refreshedToken == null) {
-            filterChain.doFilter(request, response);
-            // responseUtil.response(response, Result.failed("token无效或已过期，请重新登录"), 401);
+            rejectIfProtected(request, response, filterChain);
             return;
         }
         // 如果 Token 已续签，更新 Redis 中的 Token 并设置到响应头
         if (!refreshedToken.equals(token)) {
-            stringRedisTemplate.opsForValue().set("token" + request.getSession().getId(), refreshedToken, 30, TimeUnit.MINUTES);
+            stringRedisTemplate.opsForValue().set("token:" + request.getSession().getId(), refreshedToken, 30, TimeUnit.MINUTES);
             response.setHeader("Authorization", "Bearer " + refreshedToken);
         }
 
@@ -108,5 +109,29 @@ public class VerifyTokenFilter extends OncePerRequestFilter {
         // 通过安全上下文设置授权 token
         SecurityContextHolder.getContext().setAuthentication(authenticationToken);
         doFilter(request, response, filterChain);
+    }
+
+    private void rejectIfProtected(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws IOException, ServletException {
+        if (isPublicRequest(request)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        responseUtil.response(response, Result.failed("登录已过期，请重新登录"), 401);
+    }
+
+    private boolean isPublicRequest(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.startsWith("/api/auths/")
+                || "/api/users/register".equals(uri)
+                || uri.startsWith("/static/")
+                || "/".equals(uri)
+                || "/favicon.png".equals(uri)
+                || uri.startsWith("/swagger")
+                || uri.startsWith("/webjars/")
+                || uri.startsWith("/v2/api-docs")
+                || "/doc.html".equals(uri)
+                || uri.startsWith("/ws/")
+                || uri.startsWith("/ws-app/");
     }
 }

@@ -88,6 +88,7 @@ public class UserBookServiceImpl extends ServiceImpl<UserBookMapper, UserBook> i
         }
         // 基本信息
         bookOneQuVO.setImage(quById.getImage());
+        bookOneQuVO.setAudio(quById.getAudio());
         bookOneQuVO.setContent(quById.getContent());
         bookOneQuVO.setQuType(quById.getQuType());
         // 答案列表

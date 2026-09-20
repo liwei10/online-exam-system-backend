@@ -33,6 +33,9 @@ public class ExerciseRecordDetailVO {
     // 题干图片
     private String image;
 
+    // 题干音频
+    private String audio;
+
     // 试题类型
     private Integer quType;
 }

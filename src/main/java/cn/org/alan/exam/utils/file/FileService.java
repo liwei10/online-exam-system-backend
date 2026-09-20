@@ -25,10 +25,26 @@ public interface FileService {
     public boolean isImage(String filename);
 
     /**
+     * 判断是否为 mp3 音频
+     *
+     * @param filename 文件名
+     * @return 结果
+     */
+    public boolean isAudio(String filename);
+
+    /**
      * 判断文件是否大于50KB
      *
      * @param file 文件
      * @return 结果
      */
     public boolean isOverSize(MultipartFile file);
+
+    /**
+     * 判断音频是否超过限制大小
+     *
+     * @param file 文件
+     * @return 结果
+     */
+    public boolean isAudioOverSize(MultipartFile file);
 }
