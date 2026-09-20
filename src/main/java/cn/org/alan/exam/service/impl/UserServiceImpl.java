@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -91,6 +92,51 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         userMapper.insert(user);
         return Result.success("用户创建成功");
 
+    }
+
+    @Override
+    public Result<String> updateUser(Integer id, UserForm userForm) {
+        User existUser = userMapper.selectById(id);
+        if (existUser == null) {
+            throw new ServiceRuntimeException("用户不存在");
+        }
+        if (existUser.getRoleId() != null && existUser.getRoleId() == 3) {
+            throw new ServiceRuntimeException("无法修改管理员用户");
+        }
+
+        Integer callerRole = SecurityUtil.getRoleCode();
+        Integer existRoleId = existUser.getRoleId();
+        // 角色不允许修改：学生和教师的班级、考试数据模型不同
+        if (callerRole == 2 && (existRoleId == null || existRoleId != 1)) {
+            throw new ServiceRuntimeException("教师只能修改学生信息");
+        }
+
+        Integer gradeId = userForm.getGradeId();
+        if (existRoleId != null && existRoleId != 1) {
+            // 教师不使用单一班级
+            gradeId = null;
+        } else if (gradeId != null) {
+            Grade grade = gradeMapper.selectById(gradeId);
+            if (grade == null) {
+                throw new ServiceRuntimeException("班级不存在");
+            }
+            if (callerRole == 2) {
+                List<Integer> gradeIdList = userGradeMapper.getGradeIdListByUserId(SecurityUtil.getUserId());
+                if (gradeIdList == null || !gradeIdList.contains(gradeId)) {
+                    throw new ServiceRuntimeException("只能将学生加入自己所在的班级");
+                }
+            }
+        }
+
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<User>()
+                .eq(User::getId, id)
+                .set(User::getRealName, userForm.getRealName())
+                .set(User::getGradeId, gradeId);
+        int rows = userMapper.update(null, updateWrapper);
+        if (rows < 1) {
+            throw new ServiceRuntimeException("修改用户失败");
+        }
+        return Result.success("用户修改成功");
     }
 
     @Override

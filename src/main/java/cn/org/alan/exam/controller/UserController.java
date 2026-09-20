@@ -58,6 +58,21 @@ public class UserController {
     }
 
     /**
+     * 编辑用户，教师只能修改学生，管理员可以修改教师和学生
+     *
+     * @param id       用户ID
+     * @param userForm 用户信息
+     * @return 响应结果
+     */
+    @ApiOperation("编辑用户")
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<String> updateUser(@PathVariable("id") Integer id,
+                                     @Validated(UserGroup.UpdateUserGroup.class) @RequestBody UserForm userForm) {
+        return iUserService.updateUser(id, userForm);
+    }
+
+    /**
      * 用户修改密码
      *
      * @param userForm

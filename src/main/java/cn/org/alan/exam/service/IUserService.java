@@ -25,6 +25,15 @@ public interface IUserService extends IService<User> {
     Result<String> createUser(UserForm userForm);
 
     /**
+     * 编辑用户，可修改真实姓名、角色和学生班级
+     *
+     * @param id       用户ID
+     * @param userForm 用户信息
+     * @return 响应结果
+     */
+    Result<String> updateUser(Integer id, UserForm userForm);
+
+    /**
      * 用户修改密码
      *
      * @param userForm

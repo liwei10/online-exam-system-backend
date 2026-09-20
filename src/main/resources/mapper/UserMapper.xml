@@ -53,6 +53,7 @@
         u.real_name,
         u.role_id as roleId,
         u.create_time,
+        u.grade_id as gradeId,
         g.grade_name,
         g.user_id
         from t_user as u

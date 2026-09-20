@@ -33,7 +33,7 @@ public class UserForm {
     private String password;
 
     // 真实姓名
-    @NotBlank(groups = {UserGroup.CreateUserGroup.class, UserGroup.RegisterGroup.class}, message = "真实姓名不能为空")
+    @NotBlank(groups = {UserGroup.CreateUserGroup.class, UserGroup.RegisterGroup.class, UserGroup.UpdateUserGroup.class}, message = "真实姓名不能为空")
     @ExcelImport(value = "真实姓名*")
     private String realName;
 
