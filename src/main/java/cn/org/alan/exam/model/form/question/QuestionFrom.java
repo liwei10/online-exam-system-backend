@@ -38,7 +38,7 @@ public class QuestionFrom {
     private String image;
 
     /**
-     * 试题音频
+     * 试题音频，JSON数组字符串，兼容单个URL
      */
     private String audio;
     private String analysis;

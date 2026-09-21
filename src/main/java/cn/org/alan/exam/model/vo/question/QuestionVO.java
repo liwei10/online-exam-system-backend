@@ -21,7 +21,7 @@ public class QuestionVO {
     private Integer repoId;
     // 图片
     private  String image;
-    // 音频
+    // 音频，JSON数组字符串，兼容单个URL
     private String audio;
     // 题库标题
     private String repoTitle;
