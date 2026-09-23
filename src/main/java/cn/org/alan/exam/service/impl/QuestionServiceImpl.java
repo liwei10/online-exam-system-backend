@@ -15,6 +15,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
+import cn.org.alan.exam.common.cache.QuContentCacheService;
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.QuestionConverter;
@@ -49,6 +50,8 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
     private OptionMapper optionMapper;
     @Resource
     private ExerciseRecordMapper exerciseRecordMapper;
+    @Resource
+    private QuContentCacheService quContentCacheService;
 
     @Override
     @Transactional
@@ -91,6 +94,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         optionMapper.deleteBatchIds(qIdList);
         // 再删除试题
         questionMapper.deleteBatchIds(qIdList);
+        quContentCacheService.evictBatch(qIdList);
         return Result.success("批量删除试题成功");
     }
 
@@ -122,6 +126,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         for (Option option : options) {
             optionMapper.updateById(option);
         }
+        quContentCacheService.evict(question.getId());
         return Result.success("修改试题成功");
     }
 

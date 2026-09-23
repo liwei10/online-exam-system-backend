@@ -1,5 +1,6 @@
 package cn.org.alan.exam.service.impl;
 
+import cn.org.alan.exam.common.cache.QuContentCacheService;
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.ExerciseConverter;
@@ -7,6 +8,7 @@ import cn.org.alan.exam.converter.RecordConverter;
 import cn.org.alan.exam.mapper.*;
 import cn.org.alan.exam.model.entity.*;
 import cn.org.alan.exam.model.form.exercise.ExerciseFillAnswerFrom;
+import cn.org.alan.exam.model.vo.question.QuContentShell;
 import cn.org.alan.exam.model.vo.question.QuestionVO;
 import cn.org.alan.exam.model.vo.exercise.AnswerInfoVO;
 import cn.org.alan.exam.model.vo.exercise.QuestionSheetVO;
@@ -62,6 +64,8 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     private ExerciseRecordMapper exerciseRecordMapper;
     @Resource
     private GradeExerciseMapper gradeExerciseMapper;
+    @Resource
+    private QuContentCacheService quContentCacheService;
 
 
     @Override
@@ -484,11 +488,12 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
 
     @Override
     public Result<QuestionVO> getSingle(Integer id) {
-        QuestionVO questionVO = questionMapper.selectDetail(id);
-        if (questionVO == null || questionVO.getRepoId() == null) {
+        QuContentShell shell = quContentCacheService.getShell(id);
+        if (shell == null || shell.getRepoId() == null) {
             throw new ServiceRuntimeException("试题不存在");
         }
-        assertStudentCanExerciseRepo(questionVO.getRepoId());
+        assertStudentCanExerciseRepo(shell.getRepoId());
+        QuestionVO questionVO = quContentCacheService.toQuestionVO(shell);
         return Result.success("查询单题成功", questionVO);
     }
 

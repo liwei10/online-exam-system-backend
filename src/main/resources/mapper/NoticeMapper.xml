@@ -25,9 +25,9 @@
         where id = #{noticeId}
     </select>
 
-    <!-- 获取最新公告 -->
+    <!-- 获取最新公告（列表不返回全文 content，详情走 getNoticeDetail） -->
     <select id="getNewNotice" resultType="cn.org.alan.exam.model.vo.notice.NoticeVO">
-        select n.id as id ,n.title as title,n.image as image,n.content as content,n.user_id as userId,
+        select n.id as id ,n.title as title,n.image as image,n.user_id as userId,
         n.create_time as createTime,u.real_name as realName,n.is_public as isPublic
         from t_notice n
         left join t_user as u on n.user_id=u.id
@@ -81,9 +81,9 @@
         ORDER BY  n.create_time DESC
     </select>
 
-    <!-- 教师管理员获取公告 -->
+    <!-- 教师管理员获取公告（列表不返回全文 content，详情走 getNoticeDetail） -->
     <select id="getNotice" resultType="cn.org.alan.exam.model.vo.notice.NoticeVO">
-        SELECT n.id as id ,n.title as title,n.image as image,n.content as content,n.user_id as userId,
+        SELECT n.id as id ,n.title as title,n.image as image,n.user_id as userId,
         n.create_time as createTime,u.real_name as realName,n.is_public as isPublic
         from t_notice n
         left join t_user as u on n.user_id=u.id
@@ -96,6 +96,15 @@
                 and n.title like concat('%',#{title},'%')
             </if>
         </trim>
+    </select>
+
+    <!-- 公告详情（含全文） -->
+    <select id="getNoticeDetail" resultType="cn.org.alan.exam.model.vo.notice.NoticeVO">
+        SELECT n.id as id ,n.title as title,n.image as image,n.content as content,n.user_id as userId,
+        n.create_time as createTime,u.real_name as realName,n.is_public as isPublic
+        from t_notice n
+        left join t_user as u on n.user_id=u.id
+        where n.is_deleted = 0 and n.id = #{noticeId}
     </select>
 
 </mapper>

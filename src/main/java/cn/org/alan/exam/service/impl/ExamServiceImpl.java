@@ -1,5 +1,8 @@
 package cn.org.alan.exam.service.impl;
 
+import cn.org.alan.exam.common.cache.CacheKeys;
+import cn.org.alan.exam.common.cache.CacheService;
+import cn.org.alan.exam.common.cache.QuContentCacheService;
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.ExamConverter;
@@ -10,6 +13,7 @@ import cn.org.alan.exam.model.form.exam.ExamAddForm;
 import cn.org.alan.exam.model.form.exam.ExamUpdateForm;
 import cn.org.alan.exam.model.form.exam_qu_answer.ExamQuAnswerAddForm;
 import cn.org.alan.exam.model.vo.exam.*;
+import cn.org.alan.exam.model.vo.question.QuContentShell;
 import cn.org.alan.exam.model.vo.record.ExamRecordDetailVO;
 import cn.org.alan.exam.service.IAutoScoringService;
 import cn.org.alan.exam.service.IExamService;
@@ -32,6 +36,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -73,6 +78,12 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
     private CertificateUserMapper certificateUserMapper;
     @Resource
     private IAutoScoringService autoScoringService;
+    @Resource
+    private CacheService cacheService;
+    @Resource
+    private QuContentCacheService quContentCacheService;
+
+    private static final long EXAM_DETAIL_TTL_MINUTES = 60;
 
     @Override
     @Transactional
@@ -282,6 +293,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         if (resultRow < 1) {
             throw new ServiceRuntimeException("修改试卷失败");
         }
+        cacheService.delete(CacheKeys.examDetail(examId));
         return Result.success("修改试卷成功");
     }
 
@@ -296,6 +308,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         int row = examMapper.deleteBatchIds(examIds);
         if (row < 1) {
             throw new ServiceRuntimeException("删除失败，删除考试表时失败");
+        }
+        for (Integer examId : examIds) {
+            cacheService.delete(CacheKeys.examDetail(examId));
         }
         return Result.success("删除试卷成功");
     }
@@ -390,27 +405,27 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                 .eq(ExamQuestion::getExamId, examId);
         ExamQuestion examQuestion = examQuestionMapper.selectOne(examQuestionLambdaQueryWrapper);
         examQuDetailVO.setSort(examQuestion.getSort());
-        // 问题
-        Question quById = questionService.getById(quId);
-        // 基本信息
-        examQuDetailVO.setImage(quById.getImage());
-        examQuDetailVO.setAudio(quById.getAudio());
-        examQuDetailVO.setContent(quById.getContent());
-        examQuDetailVO.setQuType(quById.getQuType());
-        // 答案列表
-        LambdaQueryWrapper<Option> optionLambdaQuery = new LambdaQueryWrapper<>();
-        optionLambdaQuery.eq(Option::getQuId, quId);
-        List<Option> list = optionMapper.selectList(optionLambdaQuery);
-        List<OptionVO> optionVOS = examConverter.opListEntityToVO(list);
-        for (OptionVO temp : optionVOS) {
 
-            LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQueryWrapper = new LambdaQueryWrapper<>();
-            examQuAnswerLambdaQueryWrapper.eq(ExamQuAnswer::getQuestionId, temp.getQuId())
-                    .eq(ExamQuAnswer::getExamId, examId)
-                    .eq(ExamQuAnswer::getUserId, SecurityUtil.getUserId());
-            List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(examQuAnswerLambdaQueryWrapper);
+        // 题目内容壳优先走 Redis（不含正确答案 / 用户作答）
+        QuContentShell shell = quContentCacheService.getShell(quId);
+        if (shell == null) {
+            return Result.failed("试题不存在");
+        }
+        examQuDetailVO.setImage(shell.getImage());
+        examQuDetailVO.setAudio(shell.getAudio());
+        examQuDetailVO.setContent(shell.getContent());
+        examQuDetailVO.setQuType(shell.getQuType());
+        List<OptionVO> optionVOS = quContentCacheService.toOptionVOList(shell);
 
-            if (examQuAnswers.size() > 0) {
+        // 叠加当前用户作答状态（不缓存）
+        LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        examQuAnswerLambdaQueryWrapper.eq(ExamQuAnswer::getQuestionId, quId)
+                .eq(ExamQuAnswer::getExamId, examId)
+                .eq(ExamQuAnswer::getUserId, SecurityUtil.getUserId());
+        List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(examQuAnswerLambdaQueryWrapper);
+
+        if (examQuAnswers != null && !examQuAnswers.isEmpty()) {
+            for (OptionVO temp : optionVOS) {
                 for (ExamQuAnswer temp1 : examQuAnswers) {
                     Integer questionType = temp1.getQuestionType();
                     String answerId = temp1.getAnswerId();
@@ -426,7 +441,6 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                             }
                             break;
                         case 2:
-                            // 解析用户作答
                             List<Integer> quIds = Arrays.stream(temp1.getAnswerId().split(","))
                                     .map(Integer::parseInt)
                                     .collect(Collectors.toList());
@@ -444,11 +458,11 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                             break;
                     }
                 }
-                ;
             }
-
         }
-        if (quById.getQuType() != 4) {
+        if (shell.getQuType() == null || shell.getQuType() != 4) {
+            examQuDetailVO.setAnswerList(optionVOS);
+        } else if (examQuDetailVO.getAnswerList() == null) {
             examQuDetailVO.setAnswerList(optionVOS);
         }
         return Result.success("获取成功", examQuDetailVO);
@@ -553,14 +567,25 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
 
     @Override
     public Result<ExamDetailVO> getDetail(Integer examId) {
+        String cacheKey = CacheKeys.examDetail(examId);
+        ExamDetailVO cached = cacheService.get(cacheKey);
+        if (cached != null) {
+            return Result.success("查询成功", cached);
+        }
         // 查询考试详情信息
         Exam exam = this.getById(examId);
+        if (exam == null) {
+            return Result.failed("考试不存在");
+        }
         // 实体转换
         ExamDetailVO examDetailVO = examConverter.examToExamDetailVO(exam);
         LambdaQueryWrapper<User> userLambdaQueryWrapper = new LambdaQueryWrapper<>();
         userLambdaQueryWrapper.eq(User::getId, examDetailVO.getUserId());
         User user = userMapper.selectOne(userLambdaQueryWrapper);
-        examDetailVO.setUsername(user.getUserName());
+        if (user != null) {
+            examDetailVO.setUsername(user.getUserName());
+        }
+        cacheService.set(cacheKey, examDetailVO, EXAM_DETAIL_TTL_MINUTES, TimeUnit.MINUTES);
         return Result.success("查询成功", examDetailVO);
     }
 

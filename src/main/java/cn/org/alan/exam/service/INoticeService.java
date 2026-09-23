@@ -58,4 +58,12 @@ public interface INoticeService extends IService<Notice> {
      * @return
      */
     Result<IPage<NoticeVO>> getNewNotice(Integer pageNum, Integer pageSize);
+
+    /**
+     * 公告详情（含全文）
+     *
+     * @param noticeId 公告ID
+     * @return 公告详情
+     */
+    Result<NoticeVO> getNoticeDetail(Integer noticeId);
 }
