@@ -2,22 +2,34 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.org.alan.exam.mapper.ExamMapper">
 
-    <!--获取自己创建的考试，考试id，考试考试标题，是否需要阅卷-->
+    <!--获取待阅卷考试列表：管理员看全部；教师看自己创建的，或关联到自己班级（创建/加入）的-->
     <select id="selectMarkedList" resultType="cn.org.alan.exam.model.vo.answer.AnswerExamVO">
         select id as examId, title as examTitle, 1 as neededMark
         from t_exam
         <trim prefix="where" prefixOverrides="and">
             is_deleted = 0 and saq_count > 0
             <if test="role == 'role_teacher'">
-                and user_id = #{userId}
+                and (
+                    user_id = #{userId}
+                    or id in (
+                        select eg.exam_id
+                        from t_exam_grade eg
+                        where eg.grade_id in (
+                            select g.id from t_grade g where g.user_id = #{userId}
+                            union
+                            select ug.g_id from t_user_grade ug
+                            where ug.u_id = #{userId} and (ug.is_deleted = 0 or ug.is_deleted is null)
+                        )
+                    )
+                )
             </if>
-            <if test="examName != null">
+            <if test="examName != null and examName != ''">
                 and title like concat('%',#{examName},'%')
             </if>
         </trim>
     </select>
 
-    <!-- 查询学生的考试记录 -->
+    <!-- 查询学生的考试记录：已交卷即可查看（含待阅卷） -->
     <select id="getExamRecordPage" resultType="cn.org.alan.exam.model.vo.record.ExamRecordVO">
         select e.id as id,e.title as title,e.exam_duration as examDuration,e.passed_score as passedScore,
         e.gross_score as grossScore,e.max_count as maxCount,e.user_id as userId,e.certificate_id as certificateId,
@@ -26,10 +38,10 @@
         e.judge_count as judgeCount,e.judge_score as judgeScore,e.saq_count as saqCount,e.saq_score as saqScore,
         e.start_time as startTime,e.end_time as endTime,e.create_time as createTime,u.user_time as userTime,u.user_score
         as userScore,
-        u.limit_time as limitTime
+        u.limit_time as limitTime,u.whether_mark as whetherMark,u.state as state
         from t_exam e
         join t_user_exams_score as u on u.exam_id = e.id
-        where u.user_id = #{userId} and u.whether_mark in (-1,1) and e.is_deleted = 0
+        where u.user_id = #{userId} and u.state = 1 and e.is_deleted = 0
         <if test='examName!=null and examName!=""'>
             and e.title like concat('%',#{examName},'%')
         </if>
@@ -51,10 +63,10 @@
         e.judge_count as judgeCount,e.judge_score as judgeScore,e.saq_count as saqCount,e.saq_score as saqScore,
         e.start_time as startTime,e.end_time as endTime,e.create_time as createTime,u.user_time as userTime,u.user_score
         as userScore,
-        u.limit_time as limitTime
+        u.limit_time as limitTime,u.whether_mark as whetherMark,u.state as state
         from t_exam e
         join t_user_exams_score as u on u.exam_id = e.id
-        where e.user_id = #{userId} and u.whether_mark in (-1,1)
+        where e.user_id = #{userId} and u.state = 1 and e.is_deleted = 0
         <if test='examName!=null and examName!=""'>
             and e.title like concat('%',#{examName},'%')
         </if>
@@ -76,10 +88,10 @@
         e.judge_count as judgeCount,e.judge_score as judgeScore,e.saq_count as saqCount,e.saq_score as saqScore,
         e.start_time as startTime,e.end_time as endTime,e.create_time as createTime,u.user_time as userTime,u.user_score
         as userScore,
-        u.limit_time as limitTime
+        u.limit_time as limitTime,u.whether_mark as whetherMark,u.state as state
         from t_exam e
         join t_user_exams_score as u on u.exam_id = e.id
-        where u.whether_mark in (-1,1)
+        where u.state = 1 and e.is_deleted = 0
         <if test='examName!=null and examName!=""'>
             and e.title like concat('%',#{examName},'%')
         </if>
@@ -91,5 +103,14 @@
             DESC
         </if>
     </select>
+
+    <!-- 物理删除试卷（绕过 @TableLogic） -->
+    <delete id="physicalDeleteByIds">
+        DELETE FROM t_exam
+        WHERE id IN
+        <foreach collection="examIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
 
 </mapper>

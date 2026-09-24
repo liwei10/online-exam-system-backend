@@ -84,6 +84,15 @@ public interface IGradeService extends IService<Grade> {
     Result teacherExitClass(String gradeId);
 
     /**
+     * 管理员解除教师与班级的关联
+     *
+     * @param gradeId   班级ID
+     * @param teacherId 教师用户ID
+     * @return
+     */
+    Result<String> removeTeacherFromGrade(Integer gradeId, Integer teacherId);
+
+    /**
      * 学生退出班级
      *
      * @return

@@ -134,6 +134,14 @@ public class ExamRecordVO {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime limitTime;
 
+    /**
+     * 阅卷状态：-1无需阅卷 0待阅卷 1已阅卷
+     */
+    private Integer whetherMark;
 
+    /**
+     * 考试状态：0考试中 1已交卷
+     */
+    private Integer state;
 
 }

@@ -24,6 +24,11 @@ public interface UserGradeMapper extends BaseMapper<UserGrade> {
     List<Integer> getUserListByGradeId(Integer gradeId);
 
     /**
+     * 根据班级id获取关联教师详情
+     */
+    List<cn.org.alan.exam.model.vo.grade.GradeTeacherVO> getTeacherListByGradeId(Integer gradeId);
+
+    /**
      * 老师退出班级
      *
      * @param userId  用户ID

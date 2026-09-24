@@ -142,6 +142,17 @@ public class GradeController {
     }
 
     /**
+     * 管理员解除教师与班级关联
+     */
+    @ApiOperation("解除教师班级关联")
+    @DeleteMapping("/{gradeId}/teacher/{teacherId}")
+    @PreAuthorize("hasAnyAuthority('role_admin')")
+    public Result<String> removeTeacherFromGrade(@PathVariable("gradeId") Integer gradeId,
+                                                 @PathVariable("teacherId") Integer teacherId) {
+        return gradeService.removeTeacherFromGrade(gradeId, teacherId);
+    }
+
+    /**
      * 学生退出班级
      *
      * @return

@@ -22,6 +22,10 @@ public interface UserGroup {
     interface UpdateUserGroup extends UserGroup {
     }
 
+    // 个人中心修改资料（仅真实姓名）
+    interface UpdateProfileGroup extends UserGroup {
+    }
+
     interface RegisterGroup extends UserGroup {
     }
 }

@@ -8,11 +8,29 @@
         where u_id = #{userId} and g_id = #{gradeId}
     </delete>
 
-    <!-- 根据班级id获取班级的所有老师 -->
+    <!-- 根据班级id获取班级的所有老师（仅 role_id=2） -->
     <select id="getUserListByGradeId" resultType="java.lang.Integer">
         select ug.u_id
         from t_user_grade ug
+        inner join t_user u on u.id = ug.u_id
         where ug.g_id = #{gradeId}
+          and u.role_id = 2
+          and (u.is_deleted = 0 or u.is_deleted is null)
+          and (ug.is_deleted = 0 or ug.is_deleted is null)
+    </select>
+
+    <!-- 班级关联教师详情 -->
+    <select id="getTeacherListByGradeId" resultType="cn.org.alan.exam.model.vo.grade.GradeTeacherVO">
+        select u.id,
+               u.user_name as userName,
+               u.real_name as realName
+        from t_user_grade ug
+        inner join t_user u on u.id = ug.u_id
+        where ug.g_id = #{gradeId}
+          and u.role_id = 2
+          and (u.is_deleted = 0 or u.is_deleted is null)
+          and (ug.is_deleted = 0 or ug.is_deleted is null)
+        order by u.id asc
     </select>
 
     <!-- 教师id获取老师的所有班级id -->

@@ -8,6 +8,7 @@ import cn.org.alan.exam.model.entity.Grade;
 import cn.org.alan.exam.model.entity.User;
 import cn.org.alan.exam.model.entity.UserGrade;
 import cn.org.alan.exam.model.form.grade.GradeForm;
+import cn.org.alan.exam.model.vo.grade.GradeTeacherVO;
 import cn.org.alan.exam.model.vo.grade.GradeVO;
 import cn.org.alan.exam.service.IGradeService;
 import cn.org.alan.exam.utils.ClassTokenGenerator;
@@ -21,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 班级服务实现类
@@ -101,7 +104,35 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         }
         // 开始查询班级
         page = gradeMapper.selectGradePage(page, userId, gradeName, roleCode, gradeIdList);
+        if (page.getRecords() != null) {
+            for (GradeVO vo : page.getRecords()) {
+                fillTeachers(vo);
+            }
+        }
         return Result.success("查询成功", page);
+    }
+
+    private void fillTeachers(GradeVO vo) {
+        if (vo == null || vo.getId() == null) {
+            return;
+        }
+        List<GradeTeacherVO> teachers = userGradeMapper.getTeacherListByGradeId(vo.getId());
+        if (teachers == null) {
+            teachers = Collections.emptyList();
+        }
+        vo.setTeachers(teachers);
+        if (teachers.isEmpty()) {
+            vo.setTeacherNames("");
+        } else {
+            vo.setTeacherNames(teachers.stream()
+                    .map(t -> {
+                        if (t.getRealName() != null && !t.getRealName().isEmpty()) {
+                            return t.getRealName();
+                        }
+                        return t.getUserName();
+                    })
+                    .collect(Collectors.joining("、")));
+        }
     }
 
     @Override
@@ -165,6 +196,27 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
             return Result.success("教师退出班级成功");
         }
         throw new ServiceRuntimeException("教师退出班级失败");
+    }
+
+    @Override
+    @Transactional
+    public Result<String> removeTeacherFromGrade(Integer gradeId, Integer teacherId) {
+        if (gradeId == null || teacherId == null) {
+            throw new ServiceRuntimeException("参数不完整");
+        }
+        Grade grade = gradeMapper.selectById(gradeId);
+        if (grade == null) {
+            throw new ServiceRuntimeException("班级不存在");
+        }
+        User teacher = userMapper.selectById(teacherId);
+        if (teacher == null || teacher.getRoleId() == null || teacher.getRoleId() != 2) {
+            throw new ServiceRuntimeException("只能解除教师与班级的关联");
+        }
+        Integer row = userGradeMapper.teacherExitClass(teacherId, String.valueOf(gradeId));
+        if (row > 0) {
+            return Result.success("已解除教师关联");
+        }
+        throw new ServiceRuntimeException("该教师未关联此班级");
     }
 
     @Override

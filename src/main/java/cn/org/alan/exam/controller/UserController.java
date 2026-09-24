@@ -45,6 +45,16 @@ public class UserController {
 
 
     /**
+     * 个人中心修改真实姓名（用户名唯一且不可修改）
+     */
+    @ApiOperation("修改个人资料")
+    @PutMapping("/profile")
+    @PreAuthorize("hasAnyAuthority('role_student','role_teacher','role_admin')")
+    public Result<String> updateProfile(@Validated(UserGroup.UpdateProfileGroup.class) @RequestBody UserForm userForm) {
+        return iUserService.updateProfile(userForm);
+    }
+
+    /**
      * 创建用户，教师只能创建学生，管理员可以创建教师和学生
      *
      * @param userForm
@@ -155,5 +165,15 @@ public class UserController {
     @PreAuthorize("hasAnyAuthority('role_student','role_teacher','role_admin')")
     public Result<String> uploadAvatar(@RequestPart("file") MultipartFile file) {
         return iUserService.uploadAvatar(file);
+    }
+
+    /**
+     * 恢复默认头像
+     */
+    @ApiOperation("恢复默认头像")
+    @DeleteMapping("/avatar")
+    @PreAuthorize("hasAnyAuthority('role_student','role_teacher','role_admin')")
+    public Result<String> resetAvatar() {
+        return iUserService.resetAvatar();
     }
 }

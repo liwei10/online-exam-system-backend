@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
+import java.util.List;
+
 import cn.org.alan.exam.model.entity.Exam;
 import cn.org.alan.exam.model.vo.answer.AnswerExamVO;
 import cn.org.alan.exam.model.vo.record.ExamRecordVO;
@@ -57,5 +59,10 @@ public interface ExamMapper extends BaseMapper<Exam> {
      * @return 分页结果
      */
     Page<ExamRecordVO> getAllExamRecordPage(Page<ExamRecordVO> page, String examName, Boolean isASC);
+
+    /**
+     * 物理删除试卷（绕过逻辑删除）
+     */
+    int physicalDeleteByIds(@Param("examIds") List<Integer> examIds);
 
 }

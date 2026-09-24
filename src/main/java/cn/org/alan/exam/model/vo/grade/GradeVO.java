@@ -41,4 +41,14 @@ public class GradeVO {
      * 班级人数
      */
     private Integer gradeCount;
+
+    /**
+     * 关联教师列表
+     */
+    private java.util.List<GradeTeacherVO> teachers;
+
+    /**
+     * 关联教师展示名（逗号分隔，便于列表直接显示）
+     */
+    private String teacherNames;
 }

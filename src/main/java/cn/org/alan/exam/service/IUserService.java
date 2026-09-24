@@ -25,13 +25,21 @@ public interface IUserService extends IService<User> {
     Result<String> createUser(UserForm userForm);
 
     /**
-     * 编辑用户，可修改真实姓名、角色和学生班级
+     * 编辑用户，可修改真实姓名、学生/教师班级（多选）
      *
      * @param id       用户ID
      * @param userForm 用户信息
      * @return 响应结果
      */
     Result<String> updateUser(Integer id, UserForm userForm);
+
+    /**
+     * 个人中心修改真实姓名（用户名不可改）
+     *
+     * @param userForm 仅使用 realName
+     * @return 响应结果
+     */
+    Result<String> updateProfile(UserForm userForm);
 
     /**
      * 用户修改密码
@@ -91,5 +99,10 @@ public interface IUserService extends IService<User> {
      * @return 图片地址
      */
     Result<String> uploadAvatar(MultipartFile file);
+
+    /**
+     * 恢复默认头像（清空自定义头像）
+     */
+    Result<String> resetAvatar();
 
 }

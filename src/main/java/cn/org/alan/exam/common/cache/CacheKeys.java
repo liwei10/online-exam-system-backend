@@ -28,4 +28,9 @@ public final class CacheKeys {
     public static String quContent(Integer quId) {
         return QU_CONTENT_PREFIX + quId;
     }
+
+    /** 进行中考试：ZSET score=deadlineMs, member=userId:examId */
+    public static final String EXAM_ONGOING_ZSET = "cache:exam:ongoing:zset";
+    /** 进行中考试会话详情 Hash，field=userId:examId */
+    public static final String EXAM_ONGOING_HASH = "cache:exam:ongoing:hash";
 }

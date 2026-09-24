@@ -2,6 +2,7 @@ package cn.org.alan.exam.service.impl;
 
 import cn.org.alan.exam.common.cache.CacheKeys;
 import cn.org.alan.exam.common.cache.CacheService;
+import cn.org.alan.exam.common.cache.OngoingExamCacheService;
 import cn.org.alan.exam.common.cache.QuContentCacheService;
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
@@ -80,11 +81,15 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
     @Resource
     private CertificateUserMapper certificateUserMapper;
     @Resource
+    private ManualScoreMapper manualScoreMapper;
+    @Resource
     private IAutoScoringService autoScoringService;
     @Resource
     private CacheService cacheService;
     @Resource
     private QuContentCacheService quContentCacheService;
+    @Resource
+    private OngoingExamCacheService ongoingExamCacheService;
 
     private static final long EXAM_DETAIL_TTL_MINUTES = 60;
 
@@ -320,21 +325,71 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Result<String> deleteExam(String ids) {
         // 将ID字符串转换为列表
         List<Integer> examIds = Arrays.stream(ids.split(","))
                 .map(Integer::parseInt)
                 .collect(Collectors.toList());
-        // 逻辑删除试卷
-        int row = examMapper.deleteBatchIds(examIds);
+        if (examIds.isEmpty()) {
+            throw new ServiceRuntimeException("未指定要删除的考试");
+        }
+
+        // 清除进行中考试 Redis 缓存
+        List<UserExamsScore> ongoingScores = userExamsScoreMapper.selectList(
+                new LambdaQueryWrapper<UserExamsScore>()
+                        .in(UserExamsScore::getExamId, examIds)
+                        .eq(UserExamsScore::getState, 0)
+                        .select(UserExamsScore::getUserId, UserExamsScore::getExamId));
+        if (ongoingScores != null) {
+            for (UserExamsScore score : ongoingScores) {
+                ongoingExamCacheService.untrack(score.getUserId(), score.getExamId());
+            }
+        }
+
+        // 人工评分依赖答题明细，先删
+        List<ExamQuAnswer> answers = examQuAnswerMapper.selectList(
+                new LambdaQueryWrapper<ExamQuAnswer>()
+                        .in(ExamQuAnswer::getExamId, examIds)
+                        .select(ExamQuAnswer::getId));
+        if (answers != null && !answers.isEmpty()) {
+            List<Integer> answerIds = answers.stream()
+                    .map(ExamQuAnswer::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            if (!answerIds.isEmpty()) {
+                manualScoreMapper.delete(new LambdaQueryWrapper<ManualScore>()
+                        .in(ManualScore::getExamQuAnswerId, answerIds));
+            }
+        }
+
+        // 作答明细、成绩、错题本、证书发放记录
+        examQuAnswerMapper.delete(new LambdaQueryWrapper<ExamQuAnswer>()
+                .in(ExamQuAnswer::getExamId, examIds));
+        userExamsScoreMapper.delete(new LambdaQueryWrapper<UserExamsScore>()
+                .in(UserExamsScore::getExamId, examIds));
+        userBookMapper.delete(new LambdaQueryWrapper<UserBook>()
+                .in(UserBook::getExamId, examIds));
+        certificateUserMapper.delete(new LambdaQueryWrapper<CertificateUser>()
+                .in(CertificateUser::getExamId, examIds));
+
+        // 组卷与班级、题库关联
+        examQuestionMapper.delete(new LambdaQueryWrapper<ExamQuestion>()
+                .in(ExamQuestion::getExamId, examIds));
+        examGradeMapper.delete(new LambdaQueryWrapper<ExamGrade>()
+                .in(ExamGrade::getExamId, examIds));
+        examRepoMapper.delete(new LambdaQueryWrapper<ExamRepo>()
+                .in(ExamRepo::getExamId, examIds));
+
+        // 试卷本体物理删除（绕过逻辑删除，避免脏数据堆积）
+        int row = examMapper.physicalDeleteByIds(examIds);
         if (row < 1) {
-            throw new ServiceRuntimeException("删除失败，删除考试表时失败");
+            throw new ServiceRuntimeException("删除失败，考试不存在或已删除");
         }
         for (Integer examId : examIds) {
             cacheService.delete(CacheKeys.examDetail(examId));
         }
-        return Result.success("删除试卷成功");
+        return Result.success("删除试卷成功，相关作答与成绩已一并清除");
     }
 
     @Override
@@ -375,6 +430,15 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         }
         cl.add(Calendar.MINUTE, byId.getExamDuration());
         examQuestionListVO.setLeftSeconds((cl.getTimeInMillis() - System.currentTimeMillis()) / 1000);
+        // 一次查出本场已作答题目，避免按题 N+1 查库
+        LambdaQueryWrapper<ExamQuAnswer> answeredQuery = new LambdaQueryWrapper<>();
+        answeredQuery.eq(ExamQuAnswer::getExamId, examId)
+                .eq(ExamQuAnswer::getUserId, userId)
+                .select(ExamQuAnswer::getQuestionId);
+        Set<Integer> answeredQuIds = examQuAnswerMapper.selectList(answeredQuery).stream()
+                .map(ExamQuAnswer::getQuestionId)
+                .collect(Collectors.toSet());
+
         // 添加不同类型的试题列表 1：单选 2：多选 3：判断 4：简答
         for (Integer quType = 1; quType <= 4; quType++) {
             // 根据考试ID和试题类型，获取考试与试题的关联列表
@@ -383,16 +447,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             List<ExamQuestionVO> examQuestionVOS = examConverter.examQuestionListEntityToVO(examQuestionList);
             // 遍历试卷和试题的关联
             for (ExamQuestionVO temp : examQuestionVOS) {
-                LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQueryWrapper = new LambdaQueryWrapper<>();
-                examQuAnswerLambdaQueryWrapper.eq(ExamQuAnswer::getQuestionId, temp.getQuestionId())
-                        .eq(ExamQuAnswer::getExamId, examId)
-                        .eq(ExamQuAnswer::getUserId, userId);
-                List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(examQuAnswerLambdaQueryWrapper);
-                if (examQuAnswers.size() > 0) {
-                    temp.setCheckout(true);
-                } else {
-                    temp.setCheckout(false);
-                }
+                temp.setCheckout(answeredQuIds.contains(temp.getQuestionId()));
             }
             if (examQuestionVOS.isEmpty()) {
                 continue;
@@ -1188,11 +1243,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             // 尝试查询当前记录状态以提供更具体的错误信息
             UserExamsScore latestScore = userExamsScoreMapper.selectOne(userScoreQuery.last("limit 1")); // 重新查询一次确保状态
             if (latestScore != null && latestScore.getState() != 0) {
+                ongoingExamCacheService.untrack(SecurityUtil.getUserId(), examId);
                 return Result.failed("交卷失败，考试已被提交或状态异常。");
             } else {
                 return Result.failed("交卷失败，更新记录时发生未知错误。");
             }
         }
+
+        ongoingExamCacheService.untrack(SecurityUtil.getUserId(), examId);
 
         // 如果需要阅卷，调用自动评分
         if (whetherMark == 0) {
@@ -1234,6 +1292,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         if (rows == 0) {
             return Result.failed("访问失败");
         }
+        // 开考写入 Redis，供自动交卷定时任务判超时
+        if (userExamsScore.getUserId() == null) {
+            userExamsScore.setUserId(SecurityUtil.getUserId());
+        }
+        if (userExamsScore.getCreateTime() == null) {
+            userExamsScore.setCreateTime(LocalDateTime.now());
+        }
+        ongoingExamCacheService.track(userExamsScore, exam);
         return Result.success("已开始考试");
     }
 

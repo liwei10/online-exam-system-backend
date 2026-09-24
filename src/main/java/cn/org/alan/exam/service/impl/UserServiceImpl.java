@@ -86,9 +86,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             userForm.setRoleId(1);
         }
         List<Integer> gradeIds = parseGradeIds(userForm);
-        if (userForm.getRoleId() != null && userForm.getRoleId() == 2 && !gradeIds.isEmpty()) {
-            throw new ServiceRuntimeException("教师无法设置单一班级");
-        }
         // 避免管理员创建用户不传递角色
         if (userForm.getRoleId() == null || userForm.getRoleId() == 0) {
             throw new ServiceRuntimeException("未选择用户角色");
@@ -96,12 +93,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         if (userForm.getRoleId() == 1) {
             validateAndCheckTeacherGrades(gradeIds, roleCode);
             userForm.setGradeId(gradeIds.isEmpty() ? null : gradeIds.get(0));
+        } else if (userForm.getRoleId() == 2) {
+            // 教师可多选班级（由管理员指定），不写主班字段
+            validateGradesExist(gradeIds);
+            userForm.setGradeId(null);
         }
         User user = userConverter.fromToEntity(userForm);
         // 调用Mapper插入用户
         userMapper.insert(user);
-        if (userForm.getRoleId() == 1 && !gradeIds.isEmpty()) {
-            syncStudentGrades(user.getId(), gradeIds);
+        if ((userForm.getRoleId() == 1 || userForm.getRoleId() == 2) && !gradeIds.isEmpty()) {
+            syncUserGrades(user.getId(), gradeIds);
         }
         return Result.success("用户创建成功");
 
@@ -125,18 +126,22 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             throw new ServiceRuntimeException("教师只能修改学生信息");
         }
 
-        Integer gradeId = null;
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<User>()
+                .eq(User::getId, id)
+                .set(User::getRealName, userForm.getRealName());
+
         if (existRoleId != null && existRoleId == 1) {
             List<Integer> gradeIds = parseGradeIds(userForm);
             validateAndCheckTeacherGrades(gradeIds, callerRole);
-            syncStudentGrades(id, gradeIds);
-            gradeId = gradeIds.isEmpty() ? null : gradeIds.get(0);
+            syncUserGrades(id, gradeIds);
+            Integer gradeId = gradeIds.isEmpty() ? null : gradeIds.get(0);
+            updateWrapper.set(User::getGradeId, gradeId);
+        } else if (existRoleId != null && existRoleId == 2) {
+            // 管理员可为教师指定多个班级
+            List<Integer> gradeIds = parseGradeIds(userForm);
+            validateGradesExist(gradeIds);
+            syncUserGrades(id, gradeIds);
         }
-
-        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<User>()
-                .eq(User::getId, id)
-                .set(User::getRealName, userForm.getRealName())
-                .set(User::getGradeId, gradeId);
         // 密码为空则不重置；有值则重置为新密码
         if (StringUtils.isNotBlank(userForm.getPassword())) {
             String rawPassword = userForm.getPassword().trim();
@@ -150,6 +155,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             throw new ServiceRuntimeException("修改用户失败");
         }
         return Result.success("用户修改成功");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Result<String> updateProfile(UserForm userForm) {
+        Integer userId = SecurityUtil.getUserId();
+        String realName = userForm.getRealName() == null ? "" : userForm.getRealName().trim();
+        if (StringUtils.isBlank(realName)) {
+            throw new ServiceRuntimeException("真实姓名不能为空");
+        }
+        if (realName.length() > 50) {
+            throw new ServiceRuntimeException("真实姓名不能超过50个字符");
+        }
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<User>()
+                .eq(User::getId, userId)
+                .set(User::getRealName, realName);
+        int rows = userMapper.update(null, updateWrapper);
+        if (rows < 1) {
+            throw new ServiceRuntimeException("修改真实姓名失败");
+        }
+        return Result.success("修改成功");
     }
 
     private List<Integer> parseGradeIds(UserForm userForm) {
@@ -167,7 +193,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return gradeIds;
     }
 
-    private void validateAndCheckTeacherGrades(List<Integer> gradeIds, Integer callerRole) {
+    private void validateGradesExist(List<Integer> gradeIds) {
         if (gradeIds == null || gradeIds.isEmpty()) {
             return;
         }
@@ -177,6 +203,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                 throw new ServiceRuntimeException("班级不存在");
             }
         }
+    }
+
+    private void validateAndCheckTeacherGrades(List<Integer> gradeIds, Integer callerRole) {
+        validateGradesExist(gradeIds);
         if (callerRole != null && callerRole == 2) {
             List<Integer> teacherGrades = userGradeMapper.getGradeIdListByUserId(SecurityUtil.getUserId());
             if (teacherGrades == null || teacherGrades.isEmpty()) {
@@ -190,7 +220,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
     }
 
-    private void syncStudentGrades(Integer userId, List<Integer> gradeIds) {
+    private void syncUserGrades(Integer userId, List<Integer> gradeIds) {
         userGradeMapper.deleteByUserId(userId);
         if (gradeIds == null || gradeIds.isEmpty()) {
             return;
@@ -203,11 +233,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
     }
 
-    private void fillStudentGrades(UserVO userVo) {
-        if (userVo == null || userVo.getRoleId() == null || userVo.getRoleId() != 1) {
+    private void fillUserGrades(UserVO userVo) {
+        if (userVo == null || userVo.getRoleId() == null) {
             return;
         }
-        List<Integer> gradeIds = userGradeMapper.getStudentGradeIdList(userVo.getId());
+        // 学生、教师均通过关联表维护多班级
+        if (userVo.getRoleId() != 1 && userVo.getRoleId() != 2) {
+            return;
+        }
+        List<Integer> gradeIds = userVo.getRoleId() == 1
+                ? userGradeMapper.getStudentGradeIdList(userVo.getId())
+                : userGradeMapper.getGradeIdListByUserId(userVo.getId());
         List<cn.org.alan.exam.model.vo.grade.GradeVO> grades = new ArrayList<>();
         if (gradeIds != null) {
             for (Integer gid : gradeIds) {
@@ -315,7 +351,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         Integer userId = SecurityUtil.getUserId();
         UserVO userVo = userMapper.info(userId);
         userVo.setPassword(null);
-        fillStudentGrades(userVo);
+        fillUserGrades(userVo);
         return Result.success("获取用户信息成功", userVo);
     }
 
@@ -370,7 +406,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         if (page.getRecords() != null) {
             for (UserVO vo : page.getRecords()) {
-                fillStudentGrades(vo);
+                fillUserGrades(vo);
             }
         }
         return Result.success("分页获取用户信息成功", page);
@@ -397,5 +433,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         throw new ServiceRuntimeException("图片上传失败,修改用户表头像地址条数<=0");
     }
 
+    @Transactional
+    @Override
+    public Result<String> resetAvatar() {
+        Integer userId = SecurityUtil.getUserId();
+        LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(User::getId, userId).set(User::getAvatar, "");
+        int row = userMapper.update(null, wrapper);
+        if (row > 0) {
+            return Result.success("已恢复默认头像", "");
+        }
+        throw new ServiceRuntimeException("恢复默认头像失败");
+    }
 
 }

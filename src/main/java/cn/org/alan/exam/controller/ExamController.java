@@ -79,12 +79,12 @@ public class ExamController {
     }
 
     /**
-     * 删除考试
+     * 删除考试（物理删除试卷及其作答、成绩等关联数据）
      *
      * @param ids 试卷ID
      * @return
      */
-    @ApiOperation("删除考试")
+    @ApiOperation("删除考试（含作答成绩等关联数据）")
     @DeleteMapping("/{ids}")
     @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
     public Result<String> deleteExam(@PathVariable("ids") @Pattern(regexp = "^\\d+(,\\d+)*$|^\\d+$") String ids) {
