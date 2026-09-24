@@ -61,6 +61,13 @@ public class QuestionFrom {
     private Integer repoId;
 
     /**
+     * 难度等级 1-5
+     */
+    @Min(value = 1, message = "难度最少1星", groups = QuestionGroup.QuestionAddGroup.class)
+    @Max(value = 5, message = "难度最多5星", groups = QuestionGroup.QuestionAddGroup.class)
+    private Integer level;
+
+    /**
      * 选项列表
      */
     private List<Option> options;

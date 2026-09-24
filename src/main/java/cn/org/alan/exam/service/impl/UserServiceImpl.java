@@ -1,12 +1,15 @@
 package cn.org.alan.exam.service.impl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ import cn.org.alan.exam.mapper.UserGradeMapper;
 import cn.org.alan.exam.mapper.UserMapper;
 import cn.org.alan.exam.model.entity.Grade;
 import cn.org.alan.exam.model.entity.User;
+import cn.org.alan.exam.model.entity.UserGrade;
 import cn.org.alan.exam.model.form.user.UserForm;
 import cn.org.alan.exam.model.vo.user.UserVO;
 import cn.org.alan.exam.service.IFileService;
@@ -71,6 +75,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
      * @return
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Result<String> createUser(UserForm userForm) {
         // 设置默认密码
         userForm.setPassword(new BCryptPasswordEncoder().encode("123456"));
@@ -80,21 +85,30 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         if (roleCode == 2) {
             userForm.setRoleId(1);
         }
-        if(userForm.getRoleId()==2&&userForm.getGradeId()!=null){
+        List<Integer> gradeIds = parseGradeIds(userForm);
+        if (userForm.getRoleId() != null && userForm.getRoleId() == 2 && !gradeIds.isEmpty()) {
             throw new ServiceRuntimeException("教师无法设置单一班级");
         }
         // 避免管理员创建用户不传递角色
         if (userForm.getRoleId() == null || userForm.getRoleId() == 0) {
             throw new ServiceRuntimeException("未选择用户角色");
         }
+        if (userForm.getRoleId() == 1) {
+            validateAndCheckTeacherGrades(gradeIds, roleCode);
+            userForm.setGradeId(gradeIds.isEmpty() ? null : gradeIds.get(0));
+        }
         User user = userConverter.fromToEntity(userForm);
         // 调用Mapper插入用户
         userMapper.insert(user);
+        if (userForm.getRoleId() == 1 && !gradeIds.isEmpty()) {
+            syncStudentGrades(user.getId(), gradeIds);
+        }
         return Result.success("用户创建成功");
 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Result<String> updateUser(Integer id, UserForm userForm) {
         User existUser = userMapper.selectById(id);
         if (existUser == null) {
@@ -111,32 +125,110 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             throw new ServiceRuntimeException("教师只能修改学生信息");
         }
 
-        Integer gradeId = userForm.getGradeId();
-        if (existRoleId != null && existRoleId != 1) {
-            // 教师不使用单一班级
-            gradeId = null;
-        } else if (gradeId != null) {
-            Grade grade = gradeMapper.selectById(gradeId);
-            if (grade == null) {
-                throw new ServiceRuntimeException("班级不存在");
-            }
-            if (callerRole == 2) {
-                List<Integer> gradeIdList = userGradeMapper.getGradeIdListByUserId(SecurityUtil.getUserId());
-                if (gradeIdList == null || !gradeIdList.contains(gradeId)) {
-                    throw new ServiceRuntimeException("只能将学生加入自己所在的班级");
-                }
-            }
+        Integer gradeId = null;
+        if (existRoleId != null && existRoleId == 1) {
+            List<Integer> gradeIds = parseGradeIds(userForm);
+            validateAndCheckTeacherGrades(gradeIds, callerRole);
+            syncStudentGrades(id, gradeIds);
+            gradeId = gradeIds.isEmpty() ? null : gradeIds.get(0);
         }
 
         LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<User>()
                 .eq(User::getId, id)
                 .set(User::getRealName, userForm.getRealName())
                 .set(User::getGradeId, gradeId);
+        // 密码为空则不重置；有值则重置为新密码
+        if (StringUtils.isNotBlank(userForm.getPassword())) {
+            String rawPassword = userForm.getPassword().trim();
+            if (rawPassword.length() < 6) {
+                throw new ServiceRuntimeException("新密码不能少于6位");
+            }
+            updateWrapper.set(User::getPassword, new BCryptPasswordEncoder().encode(rawPassword));
+        }
         int rows = userMapper.update(null, updateWrapper);
         if (rows < 1) {
             throw new ServiceRuntimeException("修改用户失败");
         }
         return Result.success("用户修改成功");
+    }
+
+    private List<Integer> parseGradeIds(UserForm userForm) {
+        List<Integer> gradeIds = new ArrayList<>();
+        if (StringUtils.isNotBlank(userForm.getGradeIds())) {
+            gradeIds = Arrays.stream(userForm.getGradeIds().split(","))
+                    .map(String::trim)
+                    .filter(StringUtils::isNotBlank)
+                    .map(Integer::valueOf)
+                    .distinct()
+                    .collect(Collectors.toList());
+        } else if (userForm.getGradeId() != null) {
+            gradeIds.add(userForm.getGradeId());
+        }
+        return gradeIds;
+    }
+
+    private void validateAndCheckTeacherGrades(List<Integer> gradeIds, Integer callerRole) {
+        if (gradeIds == null || gradeIds.isEmpty()) {
+            return;
+        }
+        for (Integer gradeId : gradeIds) {
+            Grade grade = gradeMapper.selectById(gradeId);
+            if (grade == null) {
+                throw new ServiceRuntimeException("班级不存在");
+            }
+        }
+        if (callerRole != null && callerRole == 2) {
+            List<Integer> teacherGrades = userGradeMapper.getGradeIdListByUserId(SecurityUtil.getUserId());
+            if (teacherGrades == null || teacherGrades.isEmpty()) {
+                throw new ServiceRuntimeException("教师还未加入任何班级");
+            }
+            for (Integer gradeId : gradeIds) {
+                if (!teacherGrades.contains(gradeId)) {
+                    throw new ServiceRuntimeException("只能将学生加入自己所在的班级");
+                }
+            }
+        }
+    }
+
+    private void syncStudentGrades(Integer userId, List<Integer> gradeIds) {
+        userGradeMapper.deleteByUserId(userId);
+        if (gradeIds == null || gradeIds.isEmpty()) {
+            return;
+        }
+        for (Integer gradeId : gradeIds) {
+            UserGrade userGrade = new UserGrade();
+            userGrade.setUId(userId);
+            userGrade.setGId(gradeId);
+            userGradeMapper.insert(userGrade);
+        }
+    }
+
+    private void fillStudentGrades(UserVO userVo) {
+        if (userVo == null || userVo.getRoleId() == null || userVo.getRoleId() != 1) {
+            return;
+        }
+        List<Integer> gradeIds = userGradeMapper.getStudentGradeIdList(userVo.getId());
+        List<cn.org.alan.exam.model.vo.grade.GradeVO> grades = new ArrayList<>();
+        if (gradeIds != null) {
+            for (Integer gid : gradeIds) {
+                Grade grade = gradeMapper.selectById(gid);
+                if (grade == null) {
+                    continue;
+                }
+                cn.org.alan.exam.model.vo.grade.GradeVO gvo = new cn.org.alan.exam.model.vo.grade.GradeVO();
+                gvo.setId(grade.getId());
+                gvo.setGradeName(grade.getGradeName());
+                gvo.setCode(grade.getCode());
+                grades.add(gvo);
+            }
+        }
+        userVo.setGrades(grades);
+        if (!grades.isEmpty()) {
+            userVo.setGradeName(grades.stream()
+                    .map(cn.org.alan.exam.model.vo.grade.GradeVO::getGradeName)
+                    .collect(Collectors.joining("、")));
+            userVo.setGradeId(grades.get(0).getId());
+        }
     }
 
     @Override
@@ -220,11 +312,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
      */
     @Override
     public Result<UserVO> info() {
-        // 获取用户信息
         Integer userId = SecurityUtil.getUserId();
         UserVO userVo = userMapper.info(userId);
-        // 将密码去除
         userVo.setPassword(null);
+        fillStudentGrades(userVo);
         return Result.success("获取用户信息成功", userVo);
     }
 
@@ -236,21 +327,29 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
      */
     @Override
     public Result<String> joinGrade(String code) {
-        // 获取班级信息
         Integer userId = SecurityUtil.getUserId();
         LambdaQueryWrapper<Grade> wrapper = new LambdaQueryWrapper<Grade>().eq(Grade::getCode, code);
         Grade grade = gradeMapper.selectOne(wrapper);
         if (Objects.isNull(grade)) {
             throw new ServiceRuntimeException("班级口令不存在");
         }
+        List<Integer> existed = userGradeMapper.getStudentGradeIdList(userId);
+        if (existed != null && existed.contains(grade.getId())) {
+            return Result.success("已在班级：" + grade.getGradeName() + " 中");
+        }
+        UserGrade userGrade = new UserGrade();
+        userGrade.setUId(userId);
+        userGrade.setGId(grade.getId());
+        int insert = userGradeMapper.insert(userGrade);
+        if (insert < 1) {
+            throw new ServiceRuntimeException("加入班级失败,写入关联表失败");
+        }
+        // 兼容旧逻辑：主班字段更新为最近加入的班级
         User user = new User();
         user.setId(userId);
         user.setGradeId(grade.getId());
-        int updated = userMapper.updateById(user);
-        if (updated > 0) {
-            return Result.success("加入班级：" + grade.getGradeName() + "成功");
-        }
-        throw new ServiceRuntimeException("加入班级失败,加入数据库时失败");
+        userMapper.updateById(user);
+        return Result.success("加入班级：" + grade.getGradeName() + "成功");
     }
 
     @Override
@@ -268,6 +367,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         } else {
             // 管理员直接查询所有用户
             page = userMapper.pagingUser(page, gradeId, realName, userId, null, null);
+        }
+        if (page.getRecords() != null) {
+            for (UserVO vo : page.getRecords()) {
+                fillStudentGrades(vo);
+            }
         }
         return Result.success("分页获取用户信息成功", page);
     }

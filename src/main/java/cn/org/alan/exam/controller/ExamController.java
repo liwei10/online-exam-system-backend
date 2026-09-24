@@ -3,6 +3,7 @@ package cn.org.alan.exam.controller;
 
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.form.exam.ExamAddForm;
+import cn.org.alan.exam.model.form.exam.ExamQuestionUpdateForm;
 import cn.org.alan.exam.model.form.exam.ExamUpdateForm;
 import cn.org.alan.exam.model.form.exam_qu_answer.ExamQuAnswerAddForm;
 import cn.org.alan.exam.model.vo.exam.*;
@@ -231,5 +232,16 @@ public class ExamController {
     @PreAuthorize("hasAnyAuthority('role_teacher','role_admin','role_student')")
     public Result<List<ExamRecordDetailVO>> details(@PathVariable("examId") @NotNull Integer examId) {
         return examService.details(examId);
+    }
+
+    /**
+     * 更新考试试题（支持增删并重算总分）
+     */
+    @ApiOperation("更新考试试题")
+    @PutMapping("/{id}/questions")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<String> updateExamQuestions(@PathVariable("id") @NotNull Integer id,
+                                              @Validated @RequestBody ExamQuestionUpdateForm form) {
+        return examService.updateExamQuestions(id, form);
     }
 }

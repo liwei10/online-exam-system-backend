@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
 
@@ -152,11 +154,18 @@ public class ExamTask {
         examQuAnswerLambdaQuery.eq(ExamQuAnswer::getUserId, ues.getUserId())
                 .eq(ExamQuAnswer::getExamId, ues.getExamId());
         List<ExamQuAnswer> examQuAnswer = examQuAnswerMapper.selectList(examQuAnswerLambdaQuery);
+        LambdaQueryWrapper<ExamQuestion> eqWrapper = new LambdaQueryWrapper<>();
+        eqWrapper.eq(ExamQuestion::getExamId, ues.getExamId());
+        Map<Integer, Integer> quScoreMap = examQuestionMapper.selectList(eqWrapper).stream()
+                .collect(Collectors.toMap(ExamQuestion::getQuestionId, ExamQuestion::getScore, (a, b) -> a));
         // 客观分
         List<UserBook> userBookArrayList = new ArrayList<>();
         for (ExamQuAnswer temp : examQuAnswer) {
             if (temp.getIsRight() == 1) {
-                if (temp.getQuestionType() == 1) {
+                Integer quScore = quScoreMap.get(temp.getQuestionId());
+                if (quScore != null) {
+                    userExamsScore.setUserScore(userExamsScore.getUserScore() + quScore);
+                } else if (temp.getQuestionType() == 1) {
                     userExamsScore.setUserScore(userExamsScore.getUserScore() + examOne.getRadioScore());
                 } else if (temp.getQuestionType() == 2) {
                     userExamsScore.setUserScore(userExamsScore.getUserScore() + examOne.getMultiScore());

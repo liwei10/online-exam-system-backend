@@ -73,6 +73,11 @@ public interface IRepoService extends IService<Repo> {
      * @return 响应结果
      */
     Result<IPage<ExerciseRepoVO>> getRepo(Integer pageNum, Integer pageSize, String title, Integer categoryId);
+
+    /**
+     * 获取当前学生有权限刷题的题库分类列表
+     */
+    Result<List<cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO>> getExerciseCategories();
     
     /**
      * 按分类查询题库的方法

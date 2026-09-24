@@ -22,4 +22,24 @@
         where ug.u_id = #{userId}
     </select>
 
+    <!-- 学生所有班级（关联表 + 兼容旧的单班级字段） -->
+    <select id="getStudentGradeIdList" resultType="java.lang.Integer">
+        select distinct g_id from (
+            select ug.g_id as g_id
+            from t_user_grade ug
+            where ug.u_id = #{userId}
+              and (ug.is_deleted = 0 or ug.is_deleted is null)
+            union
+            select u.grade_id as g_id
+            from t_user u
+            where u.id = #{userId}
+              and u.grade_id is not null
+        ) t
+        where g_id is not null
+    </select>
+
+    <delete id="deleteByUserId">
+        delete from t_user_grade where u_id = #{userId}
+    </delete>
+
 </mapper>

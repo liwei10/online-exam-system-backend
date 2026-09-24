@@ -40,4 +40,14 @@ public interface UserGradeMapper extends BaseMapper<UserGrade> {
      */
     List<Integer> getGradeIdListByUserId(Integer userId);
 
+    /**
+     * 获取学生关联的所有班级ID（t_user_grade + 兼容 t_user.grade_id）
+     */
+    List<Integer> getStudentGradeIdList(Integer userId);
+
+    /**
+     * 物理删除用户全部班级关联（避免唯一键与逻辑删除冲突）
+     */
+    int deleteByUserId(Integer userId);
+
 }

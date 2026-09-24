@@ -25,13 +25,19 @@
         where eg.exam_id = #{id}
     </select>
 
-    <!-- 查询考试班级关联列表 -->
+    <!-- 查询考试班级关联列表（学生多班级） -->
     <select id="selectClassExam" resultType="cn.org.alan.exam.model.vo.exam.ExamGradeListVO">
         select *
         from t_exam
         where
         is_deleted = 0 and
-        id in (select exam_id from t_exam_grade where grade_id in (select grade_id from t_user where id = #{userId}))
+        id in (
+            select exam_id from t_exam_grade where grade_id in (
+                select g_id from t_user_grade where u_id = #{userId} and (is_deleted = 0 or is_deleted is null)
+                union
+                select grade_id from t_user where id = #{userId} and grade_id is not null
+            )
+        )
         and id not in (select exam_id from t_user_exams_score where user_id = #{userId})
         <if test="title != null">
             and title like concat('%',#{title},'%')

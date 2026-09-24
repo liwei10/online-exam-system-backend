@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -62,6 +63,20 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
             return Result.failed("非简答题的试题选项不能少于两个");
         }
         Question question = questionConverter.fromToEntity(questionFrom);
+        if (question.getLevel() == null || question.getLevel() < 1 || question.getLevel() > 5) {
+            question.setLevel(3);
+        }
+        // 新题排到题库末尾
+        if (question.getRepoId() != null) {
+            LambdaQueryWrapper<Question> sortWrapper = new LambdaQueryWrapper<Question>()
+                    .eq(Question::getRepoId, question.getRepoId())
+                    .orderByDesc(Question::getSort)
+                    .last("limit 1");
+            Question last = questionMapper.selectOne(sortWrapper);
+            question.setSort(last == null || last.getSort() == null ? 1 : last.getSort() + 1);
+        } else {
+            question.setSort(1);
+        }
         // 开始添加题干
         questionMapper.insert(question);
         // 根据试题类型添加选项
@@ -120,6 +135,9 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
     public Result<String> updateQuestion(QuestionFrom questionFrom) {
         // 修改试题
         Question question = questionConverter.fromToEntity(questionFrom);
+        if (question.getLevel() == null || question.getLevel() < 1 || question.getLevel() > 5) {
+            question.setLevel(3);
+        }
         questionMapper.updateById(question);
         // 修改选项
         List<Option> options = questionFrom.getOptions();
@@ -146,6 +164,12 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
             for (QuestionFrom questionFrom : list) {
                 Question question = questionConverter.fromToEntity(questionFrom);
                 question.setRepoId(id);
+                LambdaQueryWrapper<Question> sortWrapper = new LambdaQueryWrapper<Question>()
+                        .eq(Question::getRepoId, id)
+                        .orderByDesc(Question::getSort)
+                        .last("limit 1");
+                Question last = questionMapper.selectOne(sortWrapper);
+                question.setSort(last == null || last.getSort() == null ? 1 : last.getSort() + 1);
                 // 添加单题获取Id
                 questionMapper.insert(question);
                 // 批量添加选项
@@ -173,6 +197,46 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
             // 捕获其他异常
             return Result.failed("导入试题失败：" + e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional
+    public Result<String> sortQuestion(Integer id, String direction) {
+        Question current = questionMapper.selectById(id);
+        if (current == null) {
+            return Result.failed("试题不存在");
+        }
+        if (current.getRepoId() == null) {
+            return Result.failed("试题未绑定题库，无法排序");
+        }
+        Integer currentSort = current.getSort() == null ? 0 : current.getSort();
+        LambdaQueryWrapper<Question> neighborWrapper = new LambdaQueryWrapper<Question>()
+                .eq(Question::getRepoId, current.getRepoId());
+        if ("up".equalsIgnoreCase(direction)) {
+            neighborWrapper.lt(Question::getSort, currentSort)
+                    .orderByDesc(Question::getSort)
+                    .last("limit 1");
+        } else if ("down".equalsIgnoreCase(direction)) {
+            neighborWrapper.gt(Question::getSort, currentSort)
+                    .orderByAsc(Question::getSort)
+                    .last("limit 1");
+        } else {
+            return Result.failed("direction 仅支持 up/down");
+        }
+        Question neighbor = questionMapper.selectOne(neighborWrapper);
+        if (neighbor == null) {
+            return Result.failed("up".equalsIgnoreCase(direction) ? "已经是第一题" : "已经是最后一题");
+        }
+        Integer neighborSort = neighbor.getSort() == null ? 0 : neighbor.getSort();
+        Question updateCurrent = new Question();
+        updateCurrent.setId(current.getId());
+        updateCurrent.setSort(neighborSort);
+        Question updateNeighbor = new Question();
+        updateNeighbor.setId(neighbor.getId());
+        updateNeighbor.setSort(currentSort);
+        questionMapper.updateById(updateCurrent);
+        questionMapper.updateById(updateNeighbor);
+        return Result.success("排序调整成功");
     }
 
 }

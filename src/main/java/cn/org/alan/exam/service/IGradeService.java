@@ -88,7 +88,7 @@ public interface IGradeService extends IService<Grade> {
      *
      * @return
      */
-    Result userExitGrade();
+    Result userExitGrade(Integer gradeId);
 }
 
 

@@ -43,15 +43,18 @@
         </foreach>
     </select>
 
-    <!-- 学生是否有权刷该题库 -->
+    <!-- 学生是否有权刷该题库（支持多班级） -->
     <select id="countStudentRepoAccess" resultType="int">
         select count(1)
         from t_grade_exercise ge
         join t_repo r on r.id = ge.repo_id
         where ge.repo_id = #{repoId}
-          and ge.grade_id = #{gradeId}
           and r.is_deleted = 0
           and r.is_exercise = 1
+          and ge.grade_id in
+          <foreach collection="gradeIds" item="gid" open="(" separator="," close=")">
+              #{gid}
+          </foreach>
     </select>
 
 </mapper>

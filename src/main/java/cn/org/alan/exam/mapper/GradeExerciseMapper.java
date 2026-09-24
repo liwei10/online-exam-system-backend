@@ -71,10 +71,10 @@ public interface GradeExerciseMapper extends BaseMapper<GradeExercise> {
     /**
      * 校验学生班级是否可刷该题库（已绑定且题库开启刷题、未删除）
      *
-     * @param repoId  题库ID
-     * @param gradeId 班级ID
+     * @param repoId   题库ID
+     * @param gradeIds 班级ID列表
      * @return 命中条数
      */
-    int countStudentRepoAccess(@Param("repoId") Integer repoId, @Param("gradeId") Integer gradeId);
+    int countStudentRepoAccess(@Param("repoId") Integer repoId, @Param("gradeIds") List<Integer> gradeIds);
 
 }

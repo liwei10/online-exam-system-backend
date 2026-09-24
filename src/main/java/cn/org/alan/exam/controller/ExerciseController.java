@@ -93,6 +93,16 @@ public class ExerciseController {
     }
 
     /**
+     * 获取当前学生有权限的刷题题库分类
+     */
+    @ApiOperation("获取有权限的刷题分类")
+    @GetMapping("/categories")
+    @PreAuthorize("hasAnyAuthority('role_student')")
+    public Result<List<cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO>> getExerciseCategories() {
+        return iRepoService.getExerciseCategories();
+    }
+
+    /**
      * 获取单题详情，没有答案
      *
      * @param id 试题id

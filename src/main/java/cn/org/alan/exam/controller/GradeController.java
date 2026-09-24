@@ -149,7 +149,7 @@ public class GradeController {
     @ApiOperation("学生退出班级")
     @PutMapping("/user/exit")
     @PreAuthorize("hasAnyAuthority('role_student')")
-    public Result userExitGrade() {
-        return gradeService.userExitGrade();
+    public Result userExitGrade(@RequestParam(value = "gradeId", required = false) Integer gradeId) {
+        return gradeService.userExitGrade(gradeId);
     }
 }

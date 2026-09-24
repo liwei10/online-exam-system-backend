@@ -159,11 +159,11 @@ public class RepoServiceImpl extends ServiceImpl<RepoMapper, Repo> implements IR
     @Override
     public Result<IPage<ExerciseRepoVO>> getRepo(Integer pageNum, Integer pageSize, String title, Integer categoryId) {
         IPage<ExerciseRepoVO> page = new Page<>(pageNum, pageSize);
-        Integer gradeId = SecurityUtil.getGradeId();
-        if (gradeId == null) {
+        List<Integer> gradeIds = userGradeMapper.getStudentGradeIdList(SecurityUtil.getUserId());
+        if (gradeIds == null || gradeIds.isEmpty()) {
             return Result.success("分页获取可刷题库列表成功", page);
         }
-        page = repoMapper.selectRepo(page, title, gradeId, categoryId);
+        page = repoMapper.selectRepo(page, title, gradeIds, categoryId);
 
         List<ExerciseRepoVO> records = page.getRecords();
         for (ExerciseRepoVO vo : records) {
@@ -183,6 +183,38 @@ public class RepoServiceImpl extends ServiceImpl<RepoMapper, Repo> implements IR
         }
 
         return Result.success("分页获取可刷题库列表成功", page);
+    }
+
+    @Override
+    public Result<List<cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO>> getExerciseCategories() {
+        List<Integer> gradeIds = userGradeMapper.getStudentGradeIdList(SecurityUtil.getUserId());
+        if (gradeIds == null || gradeIds.isEmpty()) {
+            return Result.success("获取成功", Collections.emptyList());
+        }
+        List<Integer> categoryIds = repoMapper.selectExerciseCategoryIds(gradeIds);
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return Result.success("获取成功", Collections.emptyList());
+        }
+        List<cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO> result = new ArrayList<>();
+        for (Integer categoryId : categoryIds) {
+            Category category = categoryService.getById(categoryId);
+            if (category == null) {
+                continue;
+            }
+            cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO vo =
+                    new cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO();
+            vo.setId(category.getId());
+            vo.setName(category.getName());
+            vo.setParentId(category.getParentId());
+            if (category.getParentId() != null && category.getParentId() > 0) {
+                Category parent = categoryService.getById(category.getParentId());
+                if (parent != null) {
+                    vo.setParentName(parent.getName());
+                }
+            }
+            result.add(vo);
+        }
+        return Result.success("获取成功", result);
     }
 
     @Override

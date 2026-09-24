@@ -4,6 +4,7 @@ import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.entity.Exam;
 import cn.org.alan.exam.model.entity.ExamQuAnswer;
 import cn.org.alan.exam.model.form.exam.ExamAddForm;
+import cn.org.alan.exam.model.form.exam.ExamQuestionUpdateForm;
 import cn.org.alan.exam.model.form.exam.ExamUpdateForm;
 import cn.org.alan.exam.model.form.exam_qu_answer.ExamQuAnswerAddForm;
 import cn.org.alan.exam.model.vo.exam.*;
@@ -168,4 +169,13 @@ public interface IExamService extends IService<Exam> {
      * @return
      */
     Result<List<ExamRecordDetailVO>> details(Integer examId);
+
+    /**
+     * 更新考试试题（替换并重算总分）
+     *
+     * @param examId 试卷ID
+     * @param form   试题与分值
+     * @return
+     */
+    Result<String> updateExamQuestions(Integer examId, ExamQuestionUpdateForm form);
 }

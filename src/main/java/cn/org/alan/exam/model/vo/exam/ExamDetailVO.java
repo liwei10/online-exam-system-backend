@@ -1,6 +1,7 @@
 package cn.org.alan.exam.model.vo.exam;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import lombok.Data;
 
@@ -24,6 +25,16 @@ public class ExamDetailVO {
      * 考试名称
      */
     private String title;
+
+    /**
+     * 关联班级ID
+     */
+    private List<Integer> gradeIds;
+
+    /**
+     * 关联班级名称
+     */
+    private List<String> gradeNames;
 
     /**
      * 考试时长

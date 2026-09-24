@@ -28,7 +28,7 @@
         </trim>
     </select>
 
-    <!-- 分页获取可刷题库信息：必须开启刷题且绑定学生所在班级 -->
+    <!-- 分页获取可刷题库信息：必须开启刷题且绑定学生所在班级（支持多班级） -->
     <select id="selectRepo" resultType="cn.org.alan.exam.model.vo.exercise.ExerciseRepoVO">
         select r.id, r.title as repoTitle, count(q.id) as totalCount, r.category_id as categoryId
         from t_repo as r
@@ -37,7 +37,10 @@
         <where>
             r.is_deleted = 0
             and r.is_exercise = 1
-            and ge.grade_id = #{gradeId}
+            and ge.grade_id in
+            <foreach collection="gradeIds" item="gid" open="(" separator="," close=")">
+                #{gid}
+            </foreach>
             <if test="title != null and title != ''">
                 and r.title like concat('%', #{title}, '%')
             </if>
@@ -78,6 +81,20 @@
         <if test="repoName!=null and repoName!=''">
             and r.title like concat('%',#{repoName},'%')
         </if>
+    </select>
+
+    <!-- 学生可刷题库涉及的分类 -->
+    <select id="selectExerciseCategoryIds" resultType="java.lang.Integer">
+        select distinct r.category_id
+        from t_repo as r
+        join t_grade_exercise as ge on ge.repo_id = r.id
+        where r.is_deleted = 0
+          and r.is_exercise = 1
+          and r.category_id is not null
+          and ge.grade_id in
+          <foreach collection="gradeIds" item="gid" open="(" separator="," close=")">
+              #{gid}
+          </foreach>
     </select>
 
 </mapper>

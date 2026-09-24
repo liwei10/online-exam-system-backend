@@ -5,6 +5,7 @@ import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.GradeConverter;
 import cn.org.alan.exam.mapper.*;
 import cn.org.alan.exam.model.entity.Grade;
+import cn.org.alan.exam.model.entity.User;
 import cn.org.alan.exam.model.entity.UserGrade;
 import cn.org.alan.exam.model.form.grade.GradeForm;
 import cn.org.alan.exam.model.vo.grade.GradeVO;
@@ -109,8 +110,11 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         List<Integer> userIds = Arrays.stream(ids.split(","))
                 .map(Integer::parseInt)
                 .collect(java.util.stream.Collectors.toList());
-        // 移出班级
+        // 移出班级：清空主班字段 + 多班关联
         int rows = userMapper.removeUserGrade(userIds);
+        for (Integer uid : userIds) {
+            userGradeMapper.deleteByUserId(uid);
+        }
         if (rows == 0) {
             throw new ServiceRuntimeException("批量用户移除班级失败");
         }
@@ -164,16 +168,26 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
     }
 
     @Override
-    public Result userExitGrade() {
-        // 获取班级和用户ID
-        Integer gradeId = SecurityUtil.getGradeId();
+    public Result userExitGrade(Integer gradeId) {
         Integer userId = SecurityUtil.getUserId();
-        // 开始调用sql用户退出班级
-        Integer row = userMapper.userExitGrade(gradeId, userId);
-        if (row > 0) {
-            return Result.success("学生退出班级成功");
+        Integer targetGradeId = gradeId != null ? gradeId : SecurityUtil.getGradeId();
+        if (targetGradeId == null) {
+            throw new ServiceRuntimeException("未指定要退出的班级");
         }
-        throw new ServiceRuntimeException("学生退出班级失败");
+        // 删除多班关联
+        userGradeMapper.teacherExitClass(userId, String.valueOf(targetGradeId));
+        // 剩余班级只看关联表，避免仍读到旧主班字段
+        List<Integer> remain = userGradeMapper.getGradeIdListByUserId(userId);
+        Integer next = (remain == null || remain.isEmpty()) ? null : remain.get(0);
+        if (next == null) {
+            userMapper.userExitGrade(targetGradeId, userId);
+        } else {
+            User update = new User();
+            update.setId(userId);
+            update.setGradeId(next);
+            userMapper.updateById(update);
+        }
+        return Result.success("学生退出班级成功");
     }
 
 }

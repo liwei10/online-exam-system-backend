@@ -2,7 +2,6 @@ package cn.org.alan.exam.model.form.exam;
 
 import java.time.LocalDateTime;
 
-import javax.validation.constraints.Future;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
@@ -41,12 +40,11 @@ public class ExamUpdateForm {
     private Integer passedScore;
 
     // 开始时间
-    @DateTimeFormat(pattern = "yyyy-MM-dd hh:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;
 
     // 结束时间
-    @Future(message = "结束时间必须是一个必须是一个将来的日期")
-    @DateTimeFormat(pattern = "yyyy-MM-dd hh:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime endTime;
 
     // 考试班级

@@ -111,6 +111,17 @@ public class QuestionController {
     }
 
     /**
+     * 调整试题顺序
+     */
+    @ApiOperation("调整试题顺序")
+    @PutMapping("/{id}/sort")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<String> sortQuestion(@PathVariable("id") Integer id,
+                                       @RequestParam("direction") String direction) {
+        return iQuestionService.sortQuestion(id, direction);
+    }
+
+    /**
      * 批量导入试题
      *
      * @param id   题库Id

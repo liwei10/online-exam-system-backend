@@ -21,6 +21,7 @@ import cn.org.alan.exam.service.IOptionService;
 import cn.org.alan.exam.utils.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,8 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     private ExerciseRecordMapper exerciseRecordMapper;
     @Resource
     private GradeExerciseMapper gradeExerciseMapper;
+    @Resource
+    private UserGradeMapper userGradeMapper;
     @Resource
     private QuContentCacheService quContentCacheService;
 
@@ -399,30 +402,42 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     public Result<QuestionVO> fillAnswer(ExerciseFillAnswerFrom exerciseFillAnswerFrom) {
         assertStudentCanExerciseRepo(exerciseFillAnswerFrom.getRepoId());
         ExerciseRecord exerciseRecord = exerciseConverter.fromToEntity(exerciseFillAnswerFrom);
+        if (exerciseRecord.getAnswer() == null) {
+            exerciseRecord.setAnswer("");
+        }
         //默认用户回答正确
         boolean flag = true;
         exerciseRecord.setIsRight(1);
 
-        //对客观题做题正确与否校验
+        //对客观题做题正确与否校验（未作答视为错误）
         if (exerciseFillAnswerFrom.getQuType() != 4) {
-            List<Integer> options = Arrays.stream(exerciseRecord.getAnswer().split(","))
-                    .map(Integer::parseInt).collect(java.util.stream.Collectors.toList());
-            List<Integer> rightOptions = new ArrayList<>();
-            optionMapper.selectAllByQuestionId(exerciseRecord.getQuestionId()).forEach(option -> {
-                if (option.getIsRight() == 1) {
-                    rightOptions.add(option.getId());
-                }
-            });
-            if (options.size() != rightOptions.size()) {
+            String answer = exerciseRecord.getAnswer();
+            if (StringUtils.isBlank(answer)) {
                 flag = false;
+                exerciseRecord.setIsRight(0);
             } else {
-                for (Integer option : options) {
-                    if (!rightOptions.contains(option)) {
-                        flag = false;
-                        exerciseRecord.setIsRight(0);
-                        break;
+                List<Integer> options = Arrays.stream(answer.split(","))
+                        .map(String::trim)
+                        .filter(StringUtils::isNotBlank)
+                        .map(Integer::parseInt)
+                        .collect(java.util.stream.Collectors.toList());
+                List<Integer> rightOptions = new ArrayList<>();
+                optionMapper.selectAllByQuestionId(exerciseRecord.getQuestionId()).forEach(option -> {
+                    if (option.getIsRight() == 1) {
+                        rightOptions.add(option.getId());
+                    }
+                });
+                if (options.isEmpty() || options.size() != rightOptions.size()) {
+                    flag = false;
+                } else {
+                    for (Integer option : options) {
+                        if (!rightOptions.contains(option)) {
+                            flag = false;
+                            break;
+                        }
                     }
                 }
+                exerciseRecord.setIsRight(flag ? 1 : 0);
             }
         }
         if (flag) {
@@ -507,6 +522,9 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
                 .eq(ExerciseRecord::getQuestionId, quId)
                 .eq(ExerciseRecord::getUserId, SecurityUtil.getUserId());
         ExerciseRecord exerciseRecord = exerciseRecordMapper.selectOne(exerciseRecordLambdaQueryWrapper);
+        if (exerciseRecord == null) {
+            return Result.success("未作答", answerInfoVO);
+        }
         answerInfoVO.setAnswerContent(exerciseRecord.getAnswer());
         return exerciseRecord.getIsRight() == 1 ?
                 Result.success("回答正确", answerInfoVO) : Result.success("回答错误", answerInfoVO);
@@ -520,11 +538,11 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         if (repoId == null) {
             throw new ServiceRuntimeException("题库不存在");
         }
-        Integer gradeId = SecurityUtil.getGradeId();
-        if (gradeId == null) {
+        List<Integer> gradeIds = userGradeMapper.getStudentGradeIdList(SecurityUtil.getUserId());
+        if (gradeIds == null || gradeIds.isEmpty()) {
             throw new ServiceRuntimeException("请先加入班级后再刷题");
         }
-        int count = gradeExerciseMapper.countStudentRepoAccess(repoId, gradeId);
+        int count = gradeExerciseMapper.countStudentRepoAccess(repoId, gradeIds);
         if (count < 1) {
             throw new ServiceRuntimeException("无权刷该题库");
         }

@@ -53,6 +53,12 @@ public class Question implements Serializable {
     @ApiModelProperty("题库ID")
     private Integer repoId;
 
+    @ApiModelProperty("题库内排序，越小越靠前")
+    private Integer sort;
+
+    @ApiModelProperty("难度等级，1-5 星")
+    private Integer level;
+
     @ApiModelProperty("创建人ID")
     @TableField(fill = FieldFill.INSERT)
     private Integer userId;

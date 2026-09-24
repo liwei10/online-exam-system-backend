@@ -28,6 +28,8 @@ public class QuestionVO {
     // 试题类型
     private Integer quType;
     private String analysis;
+    // 难度 1-5
+    private Integer level;
     // 创建试卷
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
