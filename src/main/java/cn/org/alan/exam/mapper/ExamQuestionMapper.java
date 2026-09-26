@@ -2,6 +2,7 @@ package cn.org.alan.exam.mapper;
 
 import cn.org.alan.exam.model.entity.ExamQuestion;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Map;

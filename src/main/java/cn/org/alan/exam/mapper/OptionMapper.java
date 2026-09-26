@@ -36,5 +36,4 @@ public interface OptionMapper extends BaseMapper<Option> {
      * @return 结果集
      */
     List<Option> selectOptionByqId(Integer id);
-
 }
