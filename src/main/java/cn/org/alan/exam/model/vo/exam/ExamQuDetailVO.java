@@ -38,4 +38,9 @@ public class ExamQuDetailVO {
      */
     private Integer sort;
 
+    /**
+     * 填空题用户作答内容（多空用|||分隔）
+     */
+    private String userAnswer;
+
 }

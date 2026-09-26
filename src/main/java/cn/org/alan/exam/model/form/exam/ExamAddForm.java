@@ -91,9 +91,20 @@ public class ExamAddForm {
     @Min(value = 0)
     private Integer saqScore;
 
-    // 简答题分数
+    // 填空题数量
+    @Min(value = 0)
+    private Integer fillCount;
+
+    // 填空题分数
+    @Min(value = 0)
+    private Integer fillScore;
+
+    // 填空题是否二次人工阅卷 0否 1是
+    private Integer fillNeedMark;
+
+    // 添加试题类型
     @NotBlank(message = "添加试题类型不能为空")
     private String addQuype;
-    // 简答题分数
+    // 试题ID
     private String quIds;
 }

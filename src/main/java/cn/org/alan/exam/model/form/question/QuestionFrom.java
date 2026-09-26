@@ -28,8 +28,8 @@ public class QuestionFrom {
      * 试题类型
      */
     @NotNull(message = "试题类型(quType)不能为空", groups = QuestionGroup.QuestionAddGroup.class)
-    @Min(value = 1, message = "试题类型(quType)只能是：1单选2多选3判断4简答", groups = QuestionGroup.QuestionAddGroup.class)
-    @Max(value = 4, message = "试题类型(quType)只能是：1单选2多选3判断4简答", groups = QuestionGroup.QuestionAddGroup.class)
+    @Min(value = 1, message = "试题类型(quType)只能是：1单选2多选3判断4简答5填空", groups = QuestionGroup.QuestionAddGroup.class)
+    @Max(value = 5, message = "试题类型(quType)只能是：1单选2多选3判断4简答5填空", groups = QuestionGroup.QuestionAddGroup.class)
     private Integer quType;
 
     /**

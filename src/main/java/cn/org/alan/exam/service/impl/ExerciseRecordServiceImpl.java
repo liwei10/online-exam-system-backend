@@ -18,6 +18,7 @@ import cn.org.alan.exam.model.vo.record.ExerciseRecordDetailVO;
 import cn.org.alan.exam.model.vo.record.ExerciseRecordVO;
 import cn.org.alan.exam.service.IExerciseRecordService;
 import cn.org.alan.exam.service.IOptionService;
+import cn.org.alan.exam.utils.BlankPlaceholderUtil;
 import cn.org.alan.exam.utils.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -409,8 +410,19 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         boolean flag = true;
         exerciseRecord.setIsRight(1);
 
-        //对客观题做题正确与否校验（未作答视为错误）
-        if (exerciseFillAnswerFrom.getQuType() != 4) {
+        Integer quType = exerciseFillAnswerFrom.getQuType();
+        //对客观题做题正确与否校验（未作答视为错误）；简答跳过；填空按空比对
+        if (quType != null && quType == 4) {
+            // 简答题不自动判分
+        } else if (quType != null && quType == 5) {
+            List<Option> fillOptions = optionMapper.selectAllByQuestionId(exerciseRecord.getQuestionId());
+            fillOptions.sort(Comparator.comparing(o -> o.getSort() == null ? 0 : o.getSort()));
+            List<String> standards = fillOptions.stream().map(Option::getContent).collect(Collectors.toList());
+            List<String> userAnswers = BlankPlaceholderUtil.splitAnswers(exerciseRecord.getAnswer());
+            int correct = BlankPlaceholderUtil.countCorrect(userAnswers, standards);
+            flag = !standards.isEmpty() && correct == standards.size();
+            exerciseRecord.setIsRight(flag ? 1 : 0);
+        } else {
             String answer = exerciseRecord.getAnswer();
             if (StringUtils.isBlank(answer)) {
                 flag = false;
@@ -493,8 +505,9 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         QuestionVO questionVO = questionMapper.selectSingle(exerciseRecord.getQuestionId());
 
         //针对不同题型做出不同响应
-        //主观题响应
-        if (exerciseRecord.getQuestionType() == 4) {
+        //主观题/填空题：返回含标准答案的试题信息供复习
+        if (exerciseRecord.getQuestionType() != null
+                && (exerciseRecord.getQuestionType() == 4 || exerciseRecord.getQuestionType() == 5)) {
             return Result.success(null, questionVO);
         }
 

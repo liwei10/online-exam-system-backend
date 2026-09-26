@@ -34,6 +34,14 @@ public class ExamQuestionUpdateForm {
     @Min(value = 0)
     private Integer saqScore;
 
+    @Min(value = 0)
+    private Integer fillScore;
+
+    /**
+     * 填空题是否二次人工阅卷 0否 1是
+     */
+    private Integer fillNeedMark;
+
     /**
      * 单题分值，格式：questionId:score,questionId:score
      * 未传则回退到对应题型默认分

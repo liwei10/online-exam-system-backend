@@ -22,6 +22,7 @@ import cn.org.alan.exam.mapper.CertificateUserMapper;
 import cn.org.alan.exam.mapper.ExamMapper;
 import cn.org.alan.exam.mapper.ExamQuAnswerMapper;
 import cn.org.alan.exam.mapper.ExamQuestionMapper;
+import cn.org.alan.exam.mapper.OptionMapper;
 import cn.org.alan.exam.mapper.UserBookMapper;
 import cn.org.alan.exam.mapper.UserExamsScoreMapper;
 import cn.org.alan.exam.model.entity.CertificateUser;
@@ -34,6 +35,8 @@ import cn.org.alan.exam.model.enums.ExamState;
 import cn.org.alan.exam.model.vo.exam.ExamQuDetailVO;
 import cn.org.alan.exam.model.vo.exam.OngoingExamSession;
 import cn.org.alan.exam.service.IAutoScoringService;
+import cn.org.alan.exam.model.entity.Option;
+import cn.org.alan.exam.utils.BlankPlaceholderUtil;
 import cn.org.alan.exam.utils.ClassTokenGenerator;
 import lombok.extern.slf4j.Slf4j;
 
@@ -51,6 +54,8 @@ public class ExamTask {
     private UserBookMapper userBookMapper;
     @Resource
     private ExamQuestionMapper examQuestionMapper;
+    @Resource
+    private OptionMapper optionMapper;
     @Resource
     private CertificateUserMapper certificateUserMapper;
     @Resource
@@ -129,6 +134,37 @@ public class ExamTask {
         userExamsScore.setUserScore(0);
         userExamsScore.setState(1);
 
+        // 未作答简答题补空白记录
+        List<ExamQuestion> unansweredSaq = examQuestionMapper.getUnansweredSaqQuestions(ues.getExamId(), ues.getUserId());
+        if (unansweredSaq != null && !unansweredSaq.isEmpty()) {
+            for (ExamQuestion question : unansweredSaq) {
+                ExamQuAnswer blank = new ExamQuAnswer();
+                blank.setExamId(ues.getExamId());
+                blank.setUserId(ues.getUserId());
+                blank.setQuestionId(question.getQuestionId());
+                blank.setQuestionType(4);
+                blank.setAnswerContent("");
+                blank.setIsRight(0);
+                examQuAnswerMapper.insert(blank);
+            }
+        }
+        // 未作答填空题补空白记录
+        List<ExamQuestion> unansweredFill = examQuestionMapper.getUnansweredFillQuestions(ues.getExamId(), ues.getUserId());
+        if (unansweredFill != null && !unansweredFill.isEmpty()) {
+            for (ExamQuestion question : unansweredFill) {
+                ExamQuAnswer blank = new ExamQuAnswer();
+                blank.setExamId(ues.getExamId());
+                blank.setUserId(ues.getUserId());
+                blank.setQuestionId(question.getQuestionId());
+                blank.setQuestionType(5);
+                blank.setAnswerContent("");
+                int[] fillGrade = gradeFillAnswer(ues.getExamId(), question.getQuestionId(), "");
+                blank.setIsRight(fillGrade[0]);
+                blank.setEarnedScore(fillGrade[1]);
+                examQuAnswerMapper.insert(blank);
+            }
+        }
+
         LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQuery = new LambdaQueryWrapper<>();
         examQuAnswerLambdaQuery.eq(ExamQuAnswer::getUserId, ues.getUserId())
                 .eq(ExamQuAnswer::getExamId, ues.getExamId());
@@ -139,16 +175,38 @@ public class ExamTask {
                 .collect(Collectors.toMap(ExamQuestion::getQuestionId, ExamQuestion::getScore, (a, b) -> a));
 
         List<UserBook> userBookArrayList = new ArrayList<>();
+        boolean autoAddFillScore = examOne.getFillNeedMark() == null || examOne.getFillNeedMark() == 0;
         for (ExamQuAnswer temp : examQuAnswer) {
+            Integer questionType = temp.getQuestionType();
+            if (questionType != null && questionType == 5) {
+                int[] fillGrade = gradeFillAnswer(ues.getExamId(), temp.getQuestionId(), temp.getAnswerContent());
+                LambdaUpdateWrapper<ExamQuAnswer> fillUpdate = new LambdaUpdateWrapper<>();
+                fillUpdate.eq(ExamQuAnswer::getId, temp.getId())
+                        .set(ExamQuAnswer::getIsRight, fillGrade[0])
+                        .set(ExamQuAnswer::getEarnedScore, fillGrade[1]);
+                examQuAnswerMapper.update(null, fillUpdate);
+                if (autoAddFillScore) {
+                    userExamsScore.setUserScore(userExamsScore.getUserScore() + fillGrade[1]);
+                }
+                if (fillGrade[0] == 0) {
+                    UserBook userBook = new UserBook();
+                    userBook.setExamId(ues.getExamId());
+                    userBook.setUserId(ues.getUserId());
+                    userBook.setQuId(temp.getQuestionId());
+                    userBook.setCreateTime(nowTime);
+                    userBookArrayList.add(userBook);
+                }
+                continue;
+            }
             if (temp.getIsRight() != null && temp.getIsRight() == 1) {
                 Integer quScore = quScoreMap.get(temp.getQuestionId());
                 if (quScore != null) {
                     userExamsScore.setUserScore(userExamsScore.getUserScore() + quScore);
-                } else if (temp.getQuestionType() != null && temp.getQuestionType() == 1) {
+                } else if (questionType != null && questionType == 1) {
                     userExamsScore.setUserScore(userExamsScore.getUserScore() + examOne.getRadioScore());
-                } else if (temp.getQuestionType() != null && temp.getQuestionType() == 2) {
+                } else if (questionType != null && questionType == 2) {
                     userExamsScore.setUserScore(userExamsScore.getUserScore() + examOne.getMultiScore());
-                } else if (temp.getQuestionType() != null && temp.getQuestionType() == 3) {
+                } else if (questionType != null && questionType == 3) {
                     userExamsScore.setUserScore(userExamsScore.getUserScore() + examOne.getJudgeScore());
                 }
             } else if (temp.getIsRight() != null && temp.getIsRight() == 0) {
@@ -181,7 +239,11 @@ public class ExamTask {
             return Result.success("已交卷");
         }
 
-        if (examOne.getSaqCount() != null && examOne.getSaqCount() != 0) {
+        boolean needMark = (examOne.getSaqCount() != null && examOne.getSaqCount() > 0)
+                || (examOne.getFillCount() != null && examOne.getFillCount() > 0
+                && examOne.getFillNeedMark() != null && examOne.getFillNeedMark() == 1);
+        if (needMark) {
+
             LambdaUpdateWrapper<UserExamsScore> markWrapper = new LambdaUpdateWrapper<>();
             markWrapper.set(UserExamsScore::getWhetherMark, 0)
                     .eq(UserExamsScore::getId, latest.getId());
@@ -199,34 +261,30 @@ public class ExamTask {
             certificateUserMapper.insert(certificateUser);
         }
 
-        if (examOne.getSaqCount() != null && examOne.getSaqCount() > 0) {
-            LambdaQueryWrapper<ExamQuAnswer> saqAnswerQuery = new LambdaQueryWrapper<>();
-            saqAnswerQuery.eq(ExamQuAnswer::getUserId, ues.getUserId())
-                    .eq(ExamQuAnswer::getExamId, ues.getExamId())
-                    .eq(ExamQuAnswer::getQuestionType, 4);
-            List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(saqAnswerQuery);
-            if (examQuAnswers.isEmpty()) {
-                LambdaQueryWrapper<ExamQuestion> examQuestionQuery = new LambdaQueryWrapper<>();
-                examQuestionQuery.eq(ExamQuestion::getExamId, ues.getExamId())
-                        .eq(ExamQuestion::getType, 4);
-                List<ExamQuestion> examQuestions = examQuestionMapper.selectList(examQuestionQuery);
-                examQuestions.forEach(temp -> {
-                    ExamQuAnswer examQuAnswer1 = new ExamQuAnswer();
-                    examQuAnswer1.setExamId(ues.getExamId());
-                    examQuAnswer1.setUserId(ues.getUserId());
-                    examQuAnswer1.setQuestionId(temp.getQuestionId());
-                    examQuAnswer1.setQuestionType(temp.getType());
-                    examQuAnswer1.setIsRight(-1);
-                    examQuAnswerMapper.insert(examQuAnswer1);
-                });
-            }
-        }
-
         LambdaUpdateWrapper<UserExamsScore> doneMark = new LambdaUpdateWrapper<>();
         doneMark.set(UserExamsScore::getWhetherMark, -1)
                 .eq(UserExamsScore::getId, latest.getId());
         userExamsScoreMapper.update(null, doneMark);
         ongoingExamCacheService.untrack(ues.getUserId(), ues.getExamId());
         return Result.success("交卷成功");
+    }
+
+    private int[] gradeFillAnswer(Integer examId, Integer quId, String answerContent) {
+        LambdaQueryWrapper<Option> optionWrapper = new LambdaQueryWrapper<>();
+        optionWrapper.eq(Option::getQuId, quId).orderByAsc(Option::getSort);
+        List<Option> options = optionMapper.selectList(optionWrapper);
+        List<String> standards = options.stream().map(Option::getContent).collect(Collectors.toList());
+        List<String> userAnswers = BlankPlaceholderUtil.splitAnswers(answerContent);
+        int correct = BlankPlaceholderUtil.countCorrect(userAnswers, standards);
+        int questionScore = 0;
+        LambdaQueryWrapper<ExamQuestion> eqWrapper = new LambdaQueryWrapper<>();
+        eqWrapper.eq(ExamQuestion::getExamId, examId).eq(ExamQuestion::getQuestionId, quId);
+        ExamQuestion examQuestion = examQuestionMapper.selectOne(eqWrapper);
+        if (examQuestion != null && examQuestion.getScore() != null) {
+            questionScore = examQuestion.getScore();
+        }
+        int earned = BlankPlaceholderUtil.calcEarnedScore(questionScore, correct, standards.size());
+        int isRight = (!standards.isEmpty() && correct == standards.size()) ? 1 : 0;
+        return new int[]{isRight, earned};
     }
 }

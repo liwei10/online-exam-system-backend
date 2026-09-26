@@ -26,5 +26,9 @@ public class UserAnswerDetailVO {
     private Integer correctScore;
     private String aiReason;
     private Integer totalScore;
+    /**
+     * 试题类型 4简答 5填空(需人工阅卷时)
+     */
+    private Integer quType;
 
 }

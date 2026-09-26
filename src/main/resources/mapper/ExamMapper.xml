@@ -7,7 +7,7 @@
         select id as examId, title as examTitle, 1 as neededMark
         from t_exam
         <trim prefix="where" prefixOverrides="and">
-            is_deleted = 0 and saq_count > 0
+            is_deleted = 0 and (saq_count > 0 or (fill_count > 0 and fill_need_mark = 1))
             <if test="role == 'role_teacher'">
                 and (
                     user_id = #{userId}
@@ -36,6 +36,7 @@
         e.radio_count as radioCount,e.radio_score as radioScore,e.multi_count as multi_count,e.multi_score as
         multiScore,
         e.judge_count as judgeCount,e.judge_score as judgeScore,e.saq_count as saqCount,e.saq_score as saqScore,
+        e.fill_count as fillCount,e.fill_score as fillScore,e.fill_need_mark as fillNeedMark,
         e.start_time as startTime,e.end_time as endTime,e.create_time as createTime,u.user_time as userTime,u.user_score
         as userScore,
         u.limit_time as limitTime,u.whether_mark as whetherMark,u.state as state
@@ -61,6 +62,7 @@
         e.radio_count as radioCount,e.radio_score as radioScore,e.multi_count as multi_count,e.multi_score as
         multiScore,
         e.judge_count as judgeCount,e.judge_score as judgeScore,e.saq_count as saqCount,e.saq_score as saqScore,
+        e.fill_count as fillCount,e.fill_score as fillScore,e.fill_need_mark as fillNeedMark,
         e.start_time as startTime,e.end_time as endTime,e.create_time as createTime,u.user_time as userTime,u.user_score
         as userScore,
         u.limit_time as limitTime,u.whether_mark as whetherMark,u.state as state
@@ -86,6 +88,7 @@
         e.radio_count as radioCount,e.radio_score as radioScore,e.multi_count as multi_count,e.multi_score as
         multiScore,
         e.judge_count as judgeCount,e.judge_score as judgeScore,e.saq_count as saqCount,e.saq_score as saqScore,
+        e.fill_count as fillCount,e.fill_score as fillScore,e.fill_need_mark as fillNeedMark,
         e.start_time as startTime,e.end_time as endTime,e.create_time as createTime,u.user_time as userTime,u.user_score
         as userScore,
         u.limit_time as limitTime,u.whether_mark as whetherMark,u.state as state

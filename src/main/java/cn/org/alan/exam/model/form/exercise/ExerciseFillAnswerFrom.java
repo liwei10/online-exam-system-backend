@@ -25,6 +25,6 @@ public class ExerciseFillAnswerFrom {
     // 试题类型
     @NotNull(message = "试题类型不能为空")
     @Min(value = 1, message = "试题类型最小值应为1")
-    @Max(value = 4, message = "试题类型最大值应为4")
+    @Max(value = 5, message = "试题类型最大值应为5")
     private Integer quType;
 }

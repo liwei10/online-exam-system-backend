@@ -18,7 +18,7 @@
         and question_id = #{questionId}
     </select>
 
-    <!--获取用户回答主观题信息-->
+    <!--获取用户回答主观题信息（简答 + 需人工阅卷的填空）-->
     <select id="selectUserAnswer" resultType="cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO">
         select q.id as quId,
             q.content as quTitle,
@@ -26,17 +26,22 @@
             eqa.user_id,
             eqa.exam_id,
             eqa.answer_content as answer,
-            o.content as refAnswer,
-            eqa.ai_score as  correctScore,
+            GROUP_CONCAT(o.content ORDER BY o.sort SEPARATOR '|||') as refAnswer,
+            COALESCE(eqa.earned_score, eqa.ai_score, 0) as correctScore,
             eqa.ai_reason as aiReason,
-            e.saq_score as totalScore
+            COALESCE(eq.score,
+                CASE WHEN eqa.question_type = 5 THEN e.fill_score ELSE e.saq_score END
+            ) as totalScore,
+            eqa.question_type as quType
         from t_exam_qu_answer as eqa
         left join t_question as q on eqa.question_id = q.id
-        left join t_option as o on q.id = o.qu_id
-        left join t_exam as e on e.id = #{examId}
-        where eqa.question_type = 4
+        left join t_option as o on q.id = o.qu_id and (o.is_deleted = 0 or o.is_deleted is null)
+        left join t_exam as e on e.id = eqa.exam_id
+        left join t_exam_question eq on eq.exam_id = eqa.exam_id and eq.question_id = eqa.question_id
+        where (eqa.question_type = 4 or (eqa.question_type = 5 and e.fill_need_mark = 1))
         and eqa.user_id = #{userId}
         and eqa.exam_id = #{examId}
+        group by eqa.id
     </select>
 
     <select id="getQuestionsForGrading" resultType="cn.org.alan.exam.model.vo.question.QuestionScoreVO">

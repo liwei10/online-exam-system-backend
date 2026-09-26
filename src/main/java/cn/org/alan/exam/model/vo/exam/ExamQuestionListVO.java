@@ -19,6 +19,8 @@ public class ExamQuestionListVO {
     private List<ExamQuestionVO> judgeList;
     // 简答题列表
     private List<ExamQuestionVO> saqList;
+    // 填空题列表
+    private List<ExamQuestionVO> fillList;
     private Integer examDuration;
     public Long leftSeconds;
 }

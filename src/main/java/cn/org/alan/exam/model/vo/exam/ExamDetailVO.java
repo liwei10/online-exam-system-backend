@@ -107,6 +107,21 @@ public class ExamDetailVO {
     private Integer saqScore;
 
     /**
+     * 填空题数量
+     */
+    private Integer fillCount;
+
+    /**
+     * 填空题成绩
+     */
+    private Integer fillScore;
+
+    /**
+     * 填空题是否二次人工阅卷 0否 1是
+     */
+    private Integer fillNeedMark;
+
+    /**
      * 开始时间     YYYY-MM-DD hh:mm:ss
      */
     private LocalDateTime startTime;

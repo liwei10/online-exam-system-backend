@@ -73,4 +73,11 @@ public class ExamUpdateForm {
     @NotNull(message = "简答题分数不能为空")
     @Min(value = 0)
     private Integer saqScore;
+
+    // 填空题分数
+    @Min(value = 0)
+    private Integer fillScore;
+
+    // 填空题是否二次人工阅卷 0否 1是
+    private Integer fillNeedMark;
 }

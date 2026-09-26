@@ -30,6 +30,7 @@ import cn.org.alan.exam.model.form.question.QuestionExcelFrom;
 import cn.org.alan.exam.model.form.question.QuestionFrom;
 import cn.org.alan.exam.model.vo.question.QuestionVO;
 import cn.org.alan.exam.service.IQuestionService;
+import cn.org.alan.exam.utils.BlankPlaceholderUtil;
 import cn.org.alan.exam.utils.SecurityUtil;
 import cn.org.alan.exam.utils.excel.ExcelUtils;
 import lombok.SneakyThrows;
@@ -59,8 +60,25 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
     public Result<String> addSingleQuestion(QuestionFrom questionFrom) {
         // 入参校验
         List<Option> options = questionFrom.getOptions();
-        if (questionFrom.getQuType() != 4 && (Objects.isNull(options) || options.size() < 2)) {
+        Integer quType = questionFrom.getQuType();
+        if (quType != null && quType == 5) {
+            if (Objects.isNull(options) || options.isEmpty()) {
+                return Result.failed("填空题至少需要一个空的答案");
+            }
+            for (Option option : options) {
+                if (option.getContent() == null || option.getContent().trim().isEmpty()) {
+                    return Result.failed("填空题每空答案不能为空");
+                }
+                option.setIsRight(1);
+            }
+            String validateMsg = BlankPlaceholderUtil.validate(questionFrom.getContent(), options.size());
+            if (validateMsg != null) {
+                return Result.failed(validateMsg);
+            }
+        } else if (quType != null && quType != 4 && (Objects.isNull(options) || options.size() < 2)) {
             return Result.failed("非简答题的试题选项不能少于两个");
+        } else if (quType != null && quType == 4 && (Objects.isNull(options) || options.isEmpty())) {
+            return Result.failed("简答题需要填写参考答案");
         }
         Question question = questionConverter.fromToEntity(questionFrom);
         if (question.getLevel() == null || question.getLevel() < 1 || question.getLevel() > 5) {
@@ -85,9 +103,17 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
             Option option = questionFrom.getOptions().get(0);
             option.setQuId(question.getId());
             optionMapper.insert(option);
+        } else if (question.getQuType() == 5) {
+            // 填空题：一空一条选项，按顺序写入 sort
+            final int[] sort = {0};
+            options.forEach(option -> {
+                option.setQuId(question.getId());
+                option.setIsRight(1);
+                option.setSort(++sort[0]);
+            });
+            optionMapper.insertBatch(options);
         } else {
-            // 非简答题添加选项
-            // 把新建试题获取的id，填入选项中
+            // 客观题添加选项
             options.forEach(option -> {
                 option.setQuId(question.getId());
             });
@@ -133,16 +159,45 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
     @Override
     @Transactional
     public Result<String> updateQuestion(QuestionFrom questionFrom) {
+        List<Option> options = questionFrom.getOptions();
+        Integer quType = questionFrom.getQuType();
+        if (quType != null && quType == 5) {
+            if (Objects.isNull(options) || options.isEmpty()) {
+                return Result.failed("填空题至少需要一个空的答案");
+            }
+            for (Option option : options) {
+                if (option.getContent() == null || option.getContent().trim().isEmpty()) {
+                    return Result.failed("填空题每空答案不能为空");
+                }
+            }
+            String validateMsg = BlankPlaceholderUtil.validate(questionFrom.getContent(), options.size());
+            if (validateMsg != null) {
+                return Result.failed(validateMsg);
+            }
+        }
         // 修改试题
         Question question = questionConverter.fromToEntity(questionFrom);
         if (question.getLevel() == null || question.getLevel() < 1 || question.getLevel() > 5) {
             question.setLevel(3);
         }
         questionMapper.updateById(question);
-        // 修改选项
-        List<Option> options = questionFrom.getOptions();
-        for (Option option : options) {
-            optionMapper.updateById(option);
+        // 填空题选项数量可能变化：先删后插；其它题型按原逻辑更新
+        if (quType != null && quType == 5) {
+            LambdaQueryWrapper<Option> delWrapper = new LambdaQueryWrapper<Option>()
+                    .eq(Option::getQuId, question.getId());
+            optionMapper.delete(delWrapper);
+            final int[] sort = {0};
+            options.forEach(option -> {
+                option.setId(null);
+                option.setQuId(question.getId());
+                option.setIsRight(1);
+                option.setSort(++sort[0]);
+            });
+            optionMapper.insertBatch(options);
+        } else if (options != null) {
+            for (Option option : options) {
+                optionMapper.updateById(option);
+            }
         }
         quContentCacheService.evict(question.getId());
         return Result.success("修改试题成功");
