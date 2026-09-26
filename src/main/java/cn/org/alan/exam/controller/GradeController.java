@@ -163,4 +163,12 @@ public class GradeController {
     public Result userExitGrade(@RequestParam(value = "gradeId", required = false) Integer gradeId) {
         return gradeService.userExitGrade(gradeId);
     }
+
+    @ApiOperation("班级上移/下移")
+    @PutMapping("/{id}/sort")
+    @PreAuthorize("hasAnyAuthority('role_admin')")
+    public Result<String> sortGrade(@PathVariable("id") Integer id,
+                                    @RequestParam("direction") String direction) {
+        return gradeService.sortGrade(id, direction);
+    }
 }

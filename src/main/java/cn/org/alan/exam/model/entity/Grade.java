@@ -34,6 +34,9 @@ public class Grade implements Serializable {
     @ApiModelProperty("班级口令")
     private String code;
 
+    @ApiModelProperty("显示排序，越小越靠前")
+    private Integer sort;
+
     @TableLogic
     @ApiModelProperty("逻辑删除字段")
     private Integer isDeleted;

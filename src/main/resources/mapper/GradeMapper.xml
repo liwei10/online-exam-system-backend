@@ -18,6 +18,7 @@
         g.user_id AS userId,
         u.user_name AS userName,
         g.code,
+        g.sort,
         (SELECT COUNT(*) FROM t_user k WHERE k.grade_id = g.id AND k.is_deleted = 0) AS gradeCount
         FROM t_grade g
         JOIN t_user u ON g.user_id = u.id
@@ -41,6 +42,7 @@
                 </if>
             </if>
         </where>
+        ORDER BY g.sort ASC, g.id ASC
     </select>
 
     <!-- 根据班级代码获取班级对象 -->
@@ -73,6 +75,7 @@
                 </if>
             </if>
         </where>
+        ORDER BY g.sort ASC, g.id ASC
     </select>
 
 </mapper>

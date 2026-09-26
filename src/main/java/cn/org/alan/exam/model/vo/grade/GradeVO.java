@@ -38,6 +38,11 @@ public class GradeVO {
     private String code;
 
     /**
+     * 显示排序，越小越靠前
+     */
+    private Integer sort;
+
+    /**
      * 班级人数
      */
     private Integer gradeCount;

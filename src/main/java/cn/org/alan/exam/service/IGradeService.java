@@ -98,6 +98,15 @@ public interface IGradeService extends IService<Grade> {
      * @return
      */
     Result userExitGrade(Integer gradeId);
+
+    /**
+     * 班级上移/下移
+     *
+     * @param id        班级ID
+     * @param direction up/down
+     * @return
+     */
+    Result<String> sortGrade(Integer id, String direction);
 }
 
 

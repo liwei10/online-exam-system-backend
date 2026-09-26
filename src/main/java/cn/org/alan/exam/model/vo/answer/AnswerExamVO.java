@@ -21,4 +21,6 @@ public class AnswerExamVO {
     private Integer numberOfApplicants;
     // 已阅人数
     private Integer correctedPaper;
+    // 待阅卷人数
+    private Integer pendingMark;
 }

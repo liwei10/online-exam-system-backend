@@ -4,6 +4,7 @@ import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.entity.ManualScore;
 import cn.org.alan.exam.model.form.answer.CorrectAnswerFrom;
 import cn.org.alan.exam.model.vo.answer.AnswerExamVO;
+import cn.org.alan.exam.model.vo.answer.AnswerPaperSummaryVO;
 import cn.org.alan.exam.model.vo.answer.UncorrectedUserVO;
 import cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -53,5 +54,10 @@ public interface IManualScoreService extends IService<ManualScore> {
      * @return
      */
     Result<IPage<UncorrectedUserVO>> stuExamPage(Integer pageNum, Integer pageSize, Integer examId, String realName);
+
+    /**
+     * 阅卷/查看答卷摘要
+     */
+    Result<AnswerPaperSummaryVO> paperSummary(Integer examId, Integer userId);
 
 }

@@ -13,6 +13,7 @@ import cn.org.alan.exam.model.vo.grade.GradeVO;
 import cn.org.alan.exam.service.IGradeService;
 import cn.org.alan.exam.utils.ClassTokenGenerator;
 import cn.org.alan.exam.utils.SecurityUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -52,6 +53,12 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         gradeForm.setCode(ClassTokenGenerator.generateClassToken(18));
         // 实体转换
         Grade grade = gradeConverter.formToEntity(gradeForm);
+        // 新班级排到末尾
+        LambdaQueryWrapper<Grade> lastWrapper = new LambdaQueryWrapper<Grade>()
+                .orderByDesc(Grade::getSort)
+                .last("limit 1");
+        Grade last = gradeMapper.selectOne(lastWrapper);
+        grade.setSort(last == null || last.getSort() == null ? 1 : last.getSort() + 1);
         // 开始添加数据
         int rows = gradeMapper.insert(grade);
         if (rows == 0) {
@@ -240,6 +247,42 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
             userMapper.updateById(update);
         }
         return Result.success("学生退出班级成功");
+    }
+
+    @Override
+    @Transactional
+    public Result<String> sortGrade(Integer id, String direction) {
+        Grade current = gradeMapper.selectById(id);
+        if (current == null) {
+            return Result.failed("班级不存在");
+        }
+        Integer currentSort = current.getSort() == null ? 0 : current.getSort();
+        LambdaQueryWrapper<Grade> neighborWrapper = new LambdaQueryWrapper<>();
+        if ("up".equalsIgnoreCase(direction)) {
+            neighborWrapper.lt(Grade::getSort, currentSort)
+                    .orderByDesc(Grade::getSort)
+                    .last("limit 1");
+        } else if ("down".equalsIgnoreCase(direction)) {
+            neighborWrapper.gt(Grade::getSort, currentSort)
+                    .orderByAsc(Grade::getSort)
+                    .last("limit 1");
+        } else {
+            return Result.failed("direction 仅支持 up/down");
+        }
+        Grade neighbor = gradeMapper.selectOne(neighborWrapper);
+        if (neighbor == null) {
+            return Result.failed("up".equalsIgnoreCase(direction) ? "已经是第一个班级" : "已经是最后一个班级");
+        }
+        Integer neighborSort = neighbor.getSort() == null ? 0 : neighbor.getSort();
+        Grade updateCurrent = new Grade();
+        updateCurrent.setId(current.getId());
+        updateCurrent.setSort(neighborSort);
+        Grade updateNeighbor = new Grade();
+        updateNeighbor.setId(neighbor.getId());
+        updateNeighbor.setSort(currentSort);
+        gradeMapper.updateById(updateCurrent);
+        gradeMapper.updateById(updateNeighbor);
+        return Result.success("排序调整成功");
     }
 
 }

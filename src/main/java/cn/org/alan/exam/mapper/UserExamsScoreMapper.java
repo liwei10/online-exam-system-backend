@@ -1,6 +1,7 @@
 package cn.org.alan.exam.mapper;
 
 import cn.org.alan.exam.model.entity.UserExamsScore;
+import cn.org.alan.exam.model.vo.answer.AnswerPaperSummaryVO;
 import cn.org.alan.exam.model.vo.answer.UncorrectedUserVO;
 import cn.org.alan.exam.model.vo.score.ExportScoreVO;
 import cn.org.alan.exam.model.vo.score.GradeScoreVO;
@@ -60,5 +61,10 @@ public interface UserExamsScoreMapper extends BaseMapper<UserExamsScore> {
      * @return 查询结果
      */
     IPage<UncorrectedUserVO> uncorrectedUser(IPage<UncorrectedUserVO> page, Integer examId, String realName);
+
+    /**
+     * 阅卷/查看答卷摘要（学生、班级、用时等）
+     */
+    AnswerPaperSummaryVO selectPaperSummary(Integer examId, Integer userId);
 
 }

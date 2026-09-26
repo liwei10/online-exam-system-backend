@@ -5,6 +5,7 @@ import cn.org.alan.exam.mapper.*;
 import cn.org.alan.exam.model.entity.*;
 import cn.org.alan.exam.model.form.answer.CorrectAnswerFrom;
 import cn.org.alan.exam.model.vo.answer.AnswerExamVO;
+import cn.org.alan.exam.model.vo.answer.AnswerPaperSummaryVO;
 import cn.org.alan.exam.model.vo.answer.UncorrectedUserVO;
 import cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO;
 import cn.org.alan.exam.service.IManualScoreService;
@@ -62,41 +63,69 @@ public class ManualScoreServiceImpl extends ServiceImpl<ManualScoreMapper, Manua
     @Override
     @Transactional
     public Result<String> correct(List<CorrectAnswerFrom> correctAnswerFroms) {
+        if (correctAnswerFroms == null || correctAnswerFroms.isEmpty()) {
+            return Result.failed("批改数据不能为空");
+        }
+        CorrectAnswerFrom first = correctAnswerFroms.get(0);
+        UserExamsScore scoreRecord = userExamsScoreMapper.selectOne(new LambdaQueryWrapper<UserExamsScore>()
+                .eq(UserExamsScore::getExamId, first.getExamId())
+                .eq(UserExamsScore::getUserId, first.getUserId())
+                .last("limit 1"));
+        if (scoreRecord == null) {
+            return Result.failed("未找到该考生的交卷记录");
+        }
+        if (scoreRecord.getWhetherMark() == null || scoreRecord.getWhetherMark() != 0) {
+            return Result.failed("该答卷已批改或无需阅卷，请勿重复提交");
+        }
+
+        Exam examCfg = examMapper.selectOne(new LambdaQueryWrapper<Exam>()
+                .select(Exam::getId, Exam::getFillNeedMark, Exam::getCertificateId, Exam::getPassedScore)
+                .eq(Exam::getId, first.getExamId()));
+        if (examCfg == null) {
+            return Result.failed("考试不存在");
+        }
+        boolean fillRemarkable = examCfg.getFillNeedMark() != null && examCfg.getFillNeedMark() == 1;
+
         List<ManualScore> list = new ArrayList<>(correctAnswerFroms.size());
         AtomicInteger manualTotalScore = new AtomicInteger();
-        correctAnswerFroms.forEach(correctAnswerFrom -> {
-
-            // 获取用户作答信息id
-            LambdaQueryWrapper<ExamQuAnswer> wrapper = new LambdaQueryWrapper<ExamQuAnswer>()
-                    .select(ExamQuAnswer::getId)
+        for (CorrectAnswerFrom correctAnswerFrom : correctAnswerFroms) {
+            ExamQuAnswer answer = examQuAnswerMapper.selectOne(new LambdaQueryWrapper<ExamQuAnswer>()
+                    .select(ExamQuAnswer::getId, ExamQuAnswer::getQuestionType)
                     .eq(ExamQuAnswer::getExamId, correctAnswerFrom.getExamId())
                     .eq(ExamQuAnswer::getUserId, correctAnswerFrom.getUserId())
-                    .eq(ExamQuAnswer::getQuestionId, correctAnswerFrom.getQuestionId());
+                    .eq(ExamQuAnswer::getQuestionId, correctAnswerFrom.getQuestionId())
+                    .last("limit 1"));
+            if (answer == null) {
+                return Result.failed("未找到题目作答记录，题目ID：" + correctAnswerFrom.getQuestionId());
+            }
+            // 填空题仅在开启二次阅卷时允许人工改分，避免与自动分重复入账
+            if (answer.getQuestionType() != null && answer.getQuestionType() == 5 && !fillRemarkable) {
+                return Result.failed("该试卷填空题仅自动评分，不可人工改分");
+            }
 
             ManualScore manualScore = new ManualScore();
-            manualScore.setExamQuAnswerId(examQuAnswerMapper.selectOne(wrapper).getId());
+            manualScore.setExamQuAnswerId(answer.getId());
             manualScore.setScore(correctAnswerFrom.getScore());
             list.add(manualScore);
             manualTotalScore.addAndGet(correctAnswerFrom.getScore());
-        });
+        }
         manualScoreMapper.insertList(list);
 
-        // 把用户考试记录修改为已批改，并把简答题分数添加进去
+        // 把用户考试记录修改为已批改，并把人工分添加进去
         CorrectAnswerFrom correctAnswerFrom = correctAnswerFroms.get(0);
         LambdaUpdateWrapper<UserExamsScore> userExamsScoreLambdaUpdateWrapper = new LambdaUpdateWrapper<UserExamsScore>()
                 .eq(UserExamsScore::getExamId, correctAnswerFrom.getExamId())
                 .eq(UserExamsScore::getUserId, correctAnswerFrom.getUserId())
+                .eq(UserExamsScore::getWhetherMark, 0)
                 .set(UserExamsScore::getWhetherMark, 1)
                 .setSql("user_score = user_score + " + manualTotalScore.get());
-        userExamsScoreMapper.update(userExamsScoreLambdaUpdateWrapper);
+        int updated = userExamsScoreMapper.update(null, userExamsScoreLambdaUpdateWrapper);
+        if (updated < 1) {
+            return Result.failed("该答卷已批改或状态已变更，请刷新后重试");
+        }
 
         // 根据该考试是否有证书来给用户颁发对应证书
-        // 判断该考试是否有证书
-        LambdaQueryWrapper<Exam> examWrapper = new LambdaQueryWrapper<Exam>()
-                .select(Exam::getId, Exam::getCertificateId, Exam::getPassedScore)
-                .eq(Exam::getId, correctAnswerFrom.getExamId());
-        Exam exam = examMapper.selectOne(examWrapper);
-        // 不必对exam做非空验证，这里一定不为null
+        Exam exam = examCfg;
         if (exam.getCertificateId() != null && exam.getCertificateId() > 0) {
             // 有证书 获取用户得分
             LambdaQueryWrapper<UserExamsScore> examsScoreWrapper = new LambdaQueryWrapper<UserExamsScore>()
@@ -130,25 +159,39 @@ public class ManualScoreServiceImpl extends ServiceImpl<ManualScoreMapper, Manua
         list.forEach(answerExamVO -> {
             // 需要参加考试人数
             answerExamVO.setClassSize(examGradeMapper.selectClassSize(answerExamVO.getExamId()));
-            // 实际参加考试人数
+            // 实际交卷人数（不含仅开考未交卷）
             LambdaQueryWrapper<UserExamsScore> numberWrapper = new LambdaQueryWrapper<UserExamsScore>()
-                    .eq(UserExamsScore::getExamId, answerExamVO.getExamId());
+                    .eq(UserExamsScore::getExamId, answerExamVO.getExamId())
+                    .eq(UserExamsScore::getState, 1);
             answerExamVO.setNumberOfApplicants(userExamsScoreMapper.selectCount(numberWrapper).intValue());
             // 已阅人数
             LambdaQueryWrapper<UserExamsScore> correctedWrapper = new LambdaQueryWrapper<UserExamsScore>()
                     .eq(UserExamsScore::getWhetherMark, 1)
                     .eq(UserExamsScore::getExamId, answerExamVO.getExamId());
             answerExamVO.setCorrectedPaper(userExamsScoreMapper.selectCount(correctedWrapper).intValue());
+            // 待阅卷人数（详情页列表条件一致）
+            LambdaQueryWrapper<UserExamsScore> pendingWrapper = new LambdaQueryWrapper<UserExamsScore>()
+                    .eq(UserExamsScore::getWhetherMark, 0)
+                    .eq(UserExamsScore::getExamId, answerExamVO.getExamId());
+            answerExamVO.setPendingMark(userExamsScoreMapper.selectCount(pendingWrapper).intValue());
         });
         return Result.success(null, page);
 
     }
 
     @Override
-
     public Result<IPage<UncorrectedUserVO>> stuExamPage(Integer pageNum, Integer pageSize, Integer examId, String realName) {
         IPage<UncorrectedUserVO> page = new Page<>(pageNum, pageSize);
         page = userExamsScoreMapper.uncorrectedUser(page, examId, realName);
         return Result.success(null, page);
+    }
+
+    @Override
+    public Result<AnswerPaperSummaryVO> paperSummary(Integer examId, Integer userId) {
+        AnswerPaperSummaryVO summary = userExamsScoreMapper.selectPaperSummary(examId, userId);
+        if (summary == null) {
+            return Result.failed("未找到该考生的交卷记录");
+        }
+        return Result.success("查询成功", summary);
     }
 }

@@ -18,30 +18,41 @@
         and question_id = #{questionId}
     </select>
 
-    <!--获取用户回答主观题信息（简答 + 需人工阅卷的填空）-->
+    <!--获取用户主观题作答（简答 + 填空）；已阅优先人工分；填空始终返回，是否可改分看 fillNeedMark-->
     <select id="selectUserAnswer" resultType="cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO">
         select q.id as quId,
             q.content as quTitle,
             q.image as quImg,
-            eqa.user_id,
-            eqa.exam_id,
+            eqa.user_id as userId,
+            eqa.exam_id as examId,
             eqa.answer_content as answer,
-            GROUP_CONCAT(o.content ORDER BY o.sort SEPARATOR '|||') as refAnswer,
-            COALESCE(eqa.earned_score, eqa.ai_score, 0) as correctScore,
+            (select GROUP_CONCAT(o.content ORDER BY o.sort SEPARATOR '|||')
+             from t_option o
+             where o.qu_id = q.id and (o.is_deleted = 0 or o.is_deleted is null)
+            ) as refAnswer,
+            (select ms.score from t_manual_score ms where ms.exam_qu_answer_id = eqa.id order by ms.id desc limit 1) as manualScore,
+            COALESCE(
+                (select ms.score from t_manual_score ms where ms.exam_qu_answer_id = eqa.id order by ms.id desc limit 1),
+                eqa.earned_score,
+                eqa.ai_score,
+                0
+            ) as correctScore,
+            eqa.ai_score as aiScore,
+            eqa.earned_score as earnedScore,
             eqa.ai_reason as aiReason,
+            COALESCE(e.fill_need_mark, 0) as fillNeedMark,
             COALESCE(eq.score,
                 CASE WHEN eqa.question_type = 5 THEN e.fill_score ELSE e.saq_score END
             ) as totalScore,
             eqa.question_type as quType
         from t_exam_qu_answer as eqa
         left join t_question as q on eqa.question_id = q.id
-        left join t_option as o on q.id = o.qu_id and (o.is_deleted = 0 or o.is_deleted is null)
         left join t_exam as e on e.id = eqa.exam_id
         left join t_exam_question eq on eq.exam_id = eqa.exam_id and eq.question_id = eqa.question_id
-        where (eqa.question_type = 4 or (eqa.question_type = 5 and e.fill_need_mark = 1))
+        where eqa.question_type in (4, 5)
         and eqa.user_id = #{userId}
         and eqa.exam_id = #{examId}
-        group by eqa.id
+        order by eq.sort asc, eqa.id asc
     </select>
 
     <select id="getQuestionsForGrading" resultType="cn.org.alan.exam.model.vo.question.QuestionScoreVO">

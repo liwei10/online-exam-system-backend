@@ -4,6 +4,7 @@ import cn.org.alan.exam.common.group.AnswerGroup;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.form.answer.CorrectAnswerFrom;
 import cn.org.alan.exam.model.vo.answer.AnswerExamVO;
+import cn.org.alan.exam.model.vo.answer.AnswerPaperSummaryVO;
 import cn.org.alan.exam.model.vo.answer.UncorrectedUserVO;
 import cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO;
 import cn.org.alan.exam.service.IManualScoreService;
@@ -87,5 +88,13 @@ public class AnswerController {
                                                         @RequestParam(value = "examId") Integer examId,
                                                         @RequestParam(value = "realName", required = false) String realName) {
         return manualScoreService.stuExamPage(pageNum, pageSize, examId, realName);
+    }
+
+    @ApiOperation("阅卷答卷摘要")
+    @GetMapping("/exam/stu/summary")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<AnswerPaperSummaryVO> paperSummary(@RequestParam Integer examId,
+                                                     @RequestParam Integer userId) {
+        return manualScoreService.paperSummary(examId, userId);
     }
 }

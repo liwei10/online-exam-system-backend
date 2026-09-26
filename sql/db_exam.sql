@@ -212,11 +212,13 @@ CREATE TABLE `t_grade` (
   `grade_name` varchar(255) COLLATE utf8mb4_bin NOT NULL COMMENT '班级名称',
   `user_id` int(11) DEFAULT NULL COMMENT '创建人id',
   `code` varchar(255) COLLATE utf8mb4_bin NOT NULL COMMENT '班级口令',
+  `sort` int(11) NOT NULL DEFAULT '0' COMMENT '显示排序，越小越靠前',
   `is_deleted` int(11) NOT NULL DEFAULT '0' COMMENT '逻辑删除：0代表未删除，1代表删除',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE KEY `grade_name` (`grade_name`) USING BTREE,
   UNIQUE KEY `code` (`code`) USING BTREE,
-  KEY `idx_grade_user_id` (`user_id`) USING BTREE
+  KEY `idx_grade_user_id` (`user_id`) USING BTREE,
+  KEY `idx_grade_sort` (`sort`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
 
 -- ----------------------------
@@ -515,7 +517,7 @@ COMMIT;
 -- Records of t_grade
 -- ----------------------------
 BEGIN;
-INSERT INTO `t_grade` (`id`, `grade_name`, `user_id`, `code`, `is_deleted`) VALUES (1, '演示班级', 1, 'DemoClassToken001', 0);
+INSERT INTO `t_grade` (`id`, `grade_name`, `user_id`, `code`, `sort`, `is_deleted`) VALUES (1, '演示班级', 1, 'DemoClassToken001', 1, 0);
 COMMIT;
 
 -- ----------------------------
