@@ -101,4 +101,17 @@ public class NoticeController {
                                                 @RequestParam(value = "pageSize", required = false, defaultValue = "10") Integer pageSize) {
         return noticeService.getNewNotice(pageNum, pageSize);
     }
+
+    /**
+     * 公告详情（含全文 content；列表接口已去掉全文以节省带宽）
+     *
+     * @param id 公告ID
+     * @return 公告详情
+     */
+    @ApiOperation("公告详情")
+    @GetMapping("/detail/{id}")
+    @PreAuthorize("hasAnyAuthority('role_student','role_teacher','role_admin')")
+    public Result<NoticeVO> getNoticeDetail(@PathVariable("id") Integer id) {
+        return noticeService.getNoticeDetail(id);
+    }
 }

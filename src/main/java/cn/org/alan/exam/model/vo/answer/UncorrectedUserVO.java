@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 未批改用户
+ * 答卷用户（待阅 / 已阅）
  * @Author WeiJin
  * @Version 1.0
  * @Date 2024/4/29 9:25
@@ -21,9 +21,12 @@ public class UncorrectedUserVO {
     private String examTitle;
     // 试卷ID
     private Integer examId;
-    // 考试时间
+    // 交卷时间
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime limitTime;
+    /** 0 待阅卷 1 已阅卷 */
+    private Integer whetherMark;
+    /** 阅卷状态文案 */
     private String corrected;
 
 }

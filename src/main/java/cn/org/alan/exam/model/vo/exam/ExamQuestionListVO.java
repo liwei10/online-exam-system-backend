@@ -1,10 +1,8 @@
 package cn.org.alan.exam.model.vo.exam;
 
-import cn.org.alan.exam.model.entity.ExamQuestion;
-import lombok.Data;
-
-import java.util.Calendar;
 import java.util.List;
+
+import lombok.Data;
 
 /**
  * @Author Alan
@@ -21,6 +19,8 @@ public class ExamQuestionListVO {
     private List<ExamQuestionVO> judgeList;
     // 简答题列表
     private List<ExamQuestionVO> saqList;
+    // 填空题列表
+    private List<ExamQuestionVO> fillList;
     private Integer examDuration;
     public Long leftSeconds;
 }

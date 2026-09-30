@@ -70,4 +70,13 @@ public interface IQuestionService extends IService<Question> {
      */
     Result<String> importQuestion(Integer id, MultipartFile file);
 
+    /**
+     * 调整试题在题库内的顺序
+     *
+     * @param id        试题ID
+     * @param direction up/down
+     * @return 响应
+     */
+    Result<String> sortQuestion(Integer id, String direction);
+
 }

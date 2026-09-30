@@ -4,6 +4,7 @@ import cn.org.alan.exam.common.group.AnswerGroup;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.form.answer.CorrectAnswerFrom;
 import cn.org.alan.exam.model.vo.answer.AnswerExamVO;
+import cn.org.alan.exam.model.vo.answer.AnswerPaperSummaryVO;
 import cn.org.alan.exam.model.vo.answer.UncorrectedUserVO;
 import cn.org.alan.exam.model.vo.answer.UserAnswerDetailVO;
 import cn.org.alan.exam.service.IManualScoreService;
@@ -43,6 +44,19 @@ public class AnswerController {
     public Result<List<UserAnswerDetailVO>> getDetail(@RequestParam Integer userId,
                                                       @RequestParam Integer examId) {
         return manualScoreService.getDetail(userId, examId);
+    }
+
+    /**
+     * 学生查询本人答卷作答信息
+     *
+     * @param examId 试卷ID
+     * @return
+     */
+    @ApiOperation("学生查询本人答卷作答信息")
+    @GetMapping("/my/detail")
+    @PreAuthorize("hasAuthority('role_student')")
+    public Result<List<UserAnswerDetailVO>> myDetail(@RequestParam Integer examId) {
+        return manualScoreService.getMyDetail(examId);
     }
 
     /**
@@ -87,5 +101,26 @@ public class AnswerController {
                                                         @RequestParam(value = "examId") Integer examId,
                                                         @RequestParam(value = "realName", required = false) String realName) {
         return manualScoreService.stuExamPage(pageNum, pageSize, examId, realName);
+    }
+
+    @ApiOperation("阅卷答卷摘要")
+    @GetMapping("/exam/stu/summary")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<AnswerPaperSummaryVO> paperSummary(@RequestParam Integer examId,
+                                                     @RequestParam Integer userId) {
+        return manualScoreService.paperSummary(examId, userId);
+    }
+
+    /**
+     * 学生查询本人答卷摘要
+     *
+     * @param examId 试卷ID
+     * @return
+     */
+    @ApiOperation("学生查询本人答卷摘要")
+    @GetMapping("/my/exam/summary")
+    @PreAuthorize("hasAuthority('role_student')")
+    public Result<AnswerPaperSummaryVO> myPaperSummary(@RequestParam Integer examId) {
+        return manualScoreService.getMyPaperSummary(examId);
     }
 }

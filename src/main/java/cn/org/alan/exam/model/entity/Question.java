@@ -1,13 +1,18 @@
 package cn.org.alan.exam.model.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
-import io.swagger.annotations.Api;
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
+import com.baomidou.mybatisplus.annotation.TableName;
+
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
-
-import java.io.Serializable;
-import java.time.LocalDateTime;
 
 /**
  * 试题实体类
@@ -32,6 +37,9 @@ public class Question implements Serializable {
     @ApiModelProperty("试题图片")
     private String image;
 
+    @ApiModelProperty("试题音频，JSON数组字符串，兼容单个URL")
+    private String audio;
+
     @ApiModelProperty("题干")
     private String content;
 
@@ -44,6 +52,12 @@ public class Question implements Serializable {
 
     @ApiModelProperty("题库ID")
     private Integer repoId;
+
+    @ApiModelProperty("题库内排序，越小越靠前")
+    private Integer sort;
+
+    @ApiModelProperty("难度等级，1-5 星")
+    private Integer level;
 
     @ApiModelProperty("创建人ID")
     @TableField(fill = FieldFill.INSERT)

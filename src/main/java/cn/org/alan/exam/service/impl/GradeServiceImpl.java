@@ -5,12 +5,15 @@ import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.GradeConverter;
 import cn.org.alan.exam.mapper.*;
 import cn.org.alan.exam.model.entity.Grade;
+import cn.org.alan.exam.model.entity.User;
 import cn.org.alan.exam.model.entity.UserGrade;
 import cn.org.alan.exam.model.form.grade.GradeForm;
+import cn.org.alan.exam.model.vo.grade.GradeTeacherVO;
 import cn.org.alan.exam.model.vo.grade.GradeVO;
 import cn.org.alan.exam.service.IGradeService;
 import cn.org.alan.exam.utils.ClassTokenGenerator;
 import cn.org.alan.exam.utils.SecurityUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -20,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 班级服务实现类
@@ -38,6 +43,8 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
     private UserMapper userMapper;
     @Resource
     private UserGradeMapper userGradeMapper;
+    @Resource
+    private GradeExerciseMapper gradeExerciseMapper;
 
     @Override
     @Transactional
@@ -46,6 +53,12 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         gradeForm.setCode(ClassTokenGenerator.generateClassToken(18));
         // 实体转换
         Grade grade = gradeConverter.formToEntity(gradeForm);
+        // 新班级排到末尾
+        LambdaQueryWrapper<Grade> lastWrapper = new LambdaQueryWrapper<Grade>()
+                .orderByDesc(Grade::getSort)
+                .last("limit 1");
+        Grade last = gradeMapper.selectOne(lastWrapper);
+        grade.setSort(last == null || last.getSort() == null ? 1 : last.getSort() + 1);
         // 开始添加数据
         int rows = gradeMapper.insert(grade);
         if (rows == 0) {
@@ -80,6 +93,8 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         }
         // 逻辑删除教师与班级的关联
         userGradeMapper.deleteById(gradeId);
+        // 删除班级与题库的刷题关联
+        gradeExerciseMapper.deleteByGradeId(gradeId);
         return Result.success("删除成功");
     }
 
@@ -96,7 +111,35 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         }
         // 开始查询班级
         page = gradeMapper.selectGradePage(page, userId, gradeName, roleCode, gradeIdList);
+        if (page.getRecords() != null) {
+            for (GradeVO vo : page.getRecords()) {
+                fillTeachers(vo);
+            }
+        }
         return Result.success("查询成功", page);
+    }
+
+    private void fillTeachers(GradeVO vo) {
+        if (vo == null || vo.getId() == null) {
+            return;
+        }
+        List<GradeTeacherVO> teachers = userGradeMapper.getTeacherListByGradeId(vo.getId());
+        if (teachers == null) {
+            teachers = Collections.emptyList();
+        }
+        vo.setTeachers(teachers);
+        if (teachers.isEmpty()) {
+            vo.setTeacherNames("");
+        } else {
+            vo.setTeacherNames(teachers.stream()
+                    .map(t -> {
+                        if (t.getRealName() != null && !t.getRealName().isEmpty()) {
+                            return t.getRealName();
+                        }
+                        return t.getUserName();
+                    })
+                    .collect(Collectors.joining("、")));
+        }
     }
 
     @Override
@@ -105,8 +148,11 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
         List<Integer> userIds = Arrays.stream(ids.split(","))
                 .map(Integer::parseInt)
                 .collect(java.util.stream.Collectors.toList());
-        // 移出班级
+        // 移出班级：清空主班字段 + 多班关联
         int rows = userMapper.removeUserGrade(userIds);
+        for (Integer uid : userIds) {
+            userGradeMapper.deleteByUserId(uid);
+        }
         if (rows == 0) {
             throw new ServiceRuntimeException("批量用户移除班级失败");
         }
@@ -160,16 +206,83 @@ public class GradeServiceImpl extends ServiceImpl<GradeMapper, Grade> implements
     }
 
     @Override
-    public Result userExitGrade() {
-        // 获取班级和用户ID
-        Integer gradeId = SecurityUtil.getGradeId();
-        Integer userId = SecurityUtil.getUserId();
-        // 开始调用sql用户退出班级
-        Integer row = userMapper.userExitGrade(gradeId, userId);
-        if (row > 0) {
-            return Result.success("学生退出班级成功");
+    @Transactional
+    public Result<String> removeTeacherFromGrade(Integer gradeId, Integer teacherId) {
+        if (gradeId == null || teacherId == null) {
+            throw new ServiceRuntimeException("参数不完整");
         }
-        throw new ServiceRuntimeException("学生退出班级失败");
+        Grade grade = gradeMapper.selectById(gradeId);
+        if (grade == null) {
+            throw new ServiceRuntimeException("班级不存在");
+        }
+        User teacher = userMapper.selectById(teacherId);
+        if (teacher == null || teacher.getRoleId() == null || teacher.getRoleId() != 2) {
+            throw new ServiceRuntimeException("只能解除教师与班级的关联");
+        }
+        Integer row = userGradeMapper.teacherExitClass(teacherId, String.valueOf(gradeId));
+        if (row > 0) {
+            return Result.success("已解除教师关联");
+        }
+        throw new ServiceRuntimeException("该教师未关联此班级");
+    }
+
+    @Override
+    public Result userExitGrade(Integer gradeId) {
+        Integer userId = SecurityUtil.getUserId();
+        Integer targetGradeId = gradeId != null ? gradeId : SecurityUtil.getGradeId();
+        if (targetGradeId == null) {
+            throw new ServiceRuntimeException("未指定要退出的班级");
+        }
+        // 删除多班关联
+        userGradeMapper.teacherExitClass(userId, String.valueOf(targetGradeId));
+        // 剩余班级只看关联表，避免仍读到旧主班字段
+        List<Integer> remain = userGradeMapper.getGradeIdListByUserId(userId);
+        Integer next = (remain == null || remain.isEmpty()) ? null : remain.get(0);
+        if (next == null) {
+            userMapper.userExitGrade(targetGradeId, userId);
+        } else {
+            User update = new User();
+            update.setId(userId);
+            update.setGradeId(next);
+            userMapper.updateById(update);
+        }
+        return Result.success("学生退出班级成功");
+    }
+
+    @Override
+    @Transactional
+    public Result<String> sortGrade(Integer id, String direction) {
+        Grade current = gradeMapper.selectById(id);
+        if (current == null) {
+            return Result.failed("班级不存在");
+        }
+        Integer currentSort = current.getSort() == null ? 0 : current.getSort();
+        LambdaQueryWrapper<Grade> neighborWrapper = new LambdaQueryWrapper<>();
+        if ("up".equalsIgnoreCase(direction)) {
+            neighborWrapper.lt(Grade::getSort, currentSort)
+                    .orderByDesc(Grade::getSort)
+                    .last("limit 1");
+        } else if ("down".equalsIgnoreCase(direction)) {
+            neighborWrapper.gt(Grade::getSort, currentSort)
+                    .orderByAsc(Grade::getSort)
+                    .last("limit 1");
+        } else {
+            return Result.failed("direction 仅支持 up/down");
+        }
+        Grade neighbor = gradeMapper.selectOne(neighborWrapper);
+        if (neighbor == null) {
+            return Result.failed("up".equalsIgnoreCase(direction) ? "已经是第一个班级" : "已经是最后一个班级");
+        }
+        Integer neighborSort = neighbor.getSort() == null ? 0 : neighbor.getSort();
+        Grade updateCurrent = new Grade();
+        updateCurrent.setId(current.getId());
+        updateCurrent.setSort(neighborSort);
+        Grade updateNeighbor = new Grade();
+        updateNeighbor.setId(neighbor.getId());
+        updateNeighbor.setSort(currentSort);
+        gradeMapper.updateById(updateCurrent);
+        gradeMapper.updateById(updateNeighbor);
+        return Result.success("排序调整成功");
     }
 
 }

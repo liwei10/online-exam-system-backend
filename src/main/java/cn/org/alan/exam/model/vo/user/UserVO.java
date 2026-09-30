@@ -24,10 +24,12 @@ public class UserVO {
     private String password;
     // 头像
     private String avatar;
-    // 加入的班级名称
+    // 加入的班级名称（兼容旧字段）
     private String gradeName;
-    // 班级ID
+    // 班级ID（主班/最近加入，兼容旧字段）
     private Integer gradeId;
+    // 学生加入的全部班级
+    private java.util.List<cn.org.alan.exam.model.vo.grade.GradeVO> grades;
     // 班级创建人Id
     private Integer userId;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")

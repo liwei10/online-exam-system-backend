@@ -2,6 +2,7 @@ package cn.org.alan.exam.service;
 
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.entity.Repo;
+import cn.org.alan.exam.model.form.repo.RepoForm;
 import cn.org.alan.exam.model.vo.repo.RepoListVO;
 import cn.org.alan.exam.model.vo.repo.RepoVO;
 import cn.org.alan.exam.model.vo.exercise.ExerciseRepoVO;
@@ -21,19 +22,19 @@ public interface IRepoService extends IService<Repo> {
     /**
      * 添加题库
      *
-     * @param repo 参数
+     * @param repoForm 参数
      * @return 返回
      */
-    Result<String> addRepo(Repo repo);
+    Result<String> addRepo(RepoForm repoForm);
 
     /**
      * 修改题库
      *
-     * @param repo 修改内容
-     * @param id   路径参数题库id
+     * @param repoForm 修改内容
+     * @param id       路径参数题库id
      * @return 返回响应结果
      */
-    Result<String> updateRepo(Repo repo, Integer id);
+    Result<String> updateRepo(RepoForm repoForm, Integer id);
 
     /**
      * 根据题库id删除题库 并把试题所属题库清空
@@ -58,9 +59,10 @@ public interface IRepoService extends IService<Repo> {
      * @param pageSize   每页记录数
      * @param title      标题
      * @param categoryId 分类ID
+     * @param isExercise 是否开启刷题
      * @return 返回结果响应
      */
-    Result<IPage<RepoVO>> pagingRepo(Integer pageNum, Integer pageSize, String title, Integer categoryId);
+    Result<IPage<RepoVO>> pagingRepo(Integer pageNum, Integer pageSize, String title, Integer categoryId, Integer isExercise);
 
     /**
      * 分页获取可刷题库列表
@@ -72,10 +74,24 @@ public interface IRepoService extends IService<Repo> {
      * @return 响应结果
      */
     Result<IPage<ExerciseRepoVO>> getRepo(Integer pageNum, Integer pageSize, String title, Integer categoryId);
+
+    /**
+     * 获取当前学生有权限刷题的题库分类列表
+     */
+    Result<List<cn.org.alan.exam.model.vo.exercise.ExerciseCategoryVO>> getExerciseCategories();
     
     /**
      * 按分类查询题库的方法
      */
     Result<IPage<RepoVO>> getReposByCategory(Integer categoryId, Integer pageNum, Integer pageSize);
+
+    /**
+     * 题库上移/下移
+     *
+     * @param id          题库ID
+     * @param direction   方向
+     * @return 响应结果
+     */
+    Result<String> sortRepo(Integer id, String direction);
     
 }

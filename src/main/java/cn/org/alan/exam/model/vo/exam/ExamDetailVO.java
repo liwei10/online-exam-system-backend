@@ -1,12 +1,9 @@
 package cn.org.alan.exam.model.vo.exam;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import lombok.Data;
-
 import java.time.LocalDateTime;
+import java.util.List;
+
+import lombok.Data;
 
 /**
  * @Author Alan
@@ -28,6 +25,16 @@ public class ExamDetailVO {
      * 考试名称
      */
     private String title;
+
+    /**
+     * 关联班级ID
+     */
+    private List<Integer> gradeIds;
+
+    /**
+     * 关联班级名称
+     */
+    private List<String> gradeNames;
 
     /**
      * 考试时长
@@ -98,6 +105,21 @@ public class ExamDetailVO {
      * 简答题成绩     数据库存储*100，前端正常输入和展示/100
      */
     private Integer saqScore;
+
+    /**
+     * 填空题数量
+     */
+    private Integer fillCount;
+
+    /**
+     * 填空题成绩
+     */
+    private Integer fillScore;
+
+    /**
+     * 填空题是否二次人工阅卷 0否 1是
+     */
+    private Integer fillNeedMark;
 
     /**
      * 开始时间     YYYY-MM-DD hh:mm:ss

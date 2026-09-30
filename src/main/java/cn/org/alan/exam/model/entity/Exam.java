@@ -83,6 +83,21 @@ public class Exam implements Serializable {
     @ApiModelProperty("简答题成绩")
     private Integer saqScore;
 
+    @ApiModelProperty("填空题数量")
+    private Integer fillCount;
+
+    /**
+     * 数据库存储*100，前端正常输入和展示/100
+     */
+    @ApiModelProperty("填空题成绩")
+    private Integer fillScore;
+
+    /**
+     * 0否 1是：填空题是否需要二次人工阅卷
+     */
+    @ApiModelProperty("填空题是否二次人工阅卷")
+    private Integer fillNeedMark;
+
     /**
      * YYYY-MM-DD hh:mm:ss
      */

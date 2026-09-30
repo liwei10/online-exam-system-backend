@@ -186,4 +186,16 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice> impleme
         page = noticeMapper.getNewNotice(page,teachIdList,noticeIdList,adminIdList);
         return Result.success("查询成功", page);
     }
+
+    @Override
+    public Result<NoticeVO> getNoticeDetail(Integer noticeId) {
+        NoticeVO noticeVO = noticeMapper.getNoticeDetail(noticeId);
+        if (noticeVO == null) {
+            return Result.failed("公告不存在");
+        }
+        // 教师端编辑需要班级列表
+        List<Integer> gradeList = noticeGradeMapper.getGradeList(noticeId);
+        noticeVO.setGradeIds(gradeList);
+        return Result.success("查询成功", noticeVO);
+    }
 }

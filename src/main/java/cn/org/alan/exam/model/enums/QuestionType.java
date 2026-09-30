@@ -18,7 +18,7 @@ public enum QuestionType {
     MULTIPLE_CHOICE_QUESTIONS(2,"多选题"),
     TRUE_OR_FALSE_QUESTIONS(3,"判断题"),
     SHORT_ANSWER_QUESTIONS(4,"简答题"),
-    // 其他状态...
+    FILL_BLANK_QUESTIONS(5,"填空题"),
     ;
     private final int code;
     private final String desc;

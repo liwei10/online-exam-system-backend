@@ -1,11 +1,10 @@
 package cn.org.alan.exam.model.vo.exam;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.Data;
-
 import java.time.LocalDateTime;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import lombok.Data;
 
 /**
  * @Author Alan
@@ -94,6 +93,21 @@ public class ExamVO {
      * 简答题成绩     数据库存储*100，前端正常输入和展示/100
      */
     private Integer saqScore;
+
+    /**
+     * 填空题数量
+     */
+    private Integer fillCount;
+
+    /**
+     * 填空题成绩
+     */
+    private Integer fillScore;
+
+    /**
+     * 填空题是否二次人工阅卷 0否 1是
+     */
+    private Integer fillNeedMark;
 
     /**
      * 开始时间     YYYY-MM-DD hh:mm:ss

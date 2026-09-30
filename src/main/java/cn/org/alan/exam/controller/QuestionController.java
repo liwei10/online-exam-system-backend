@@ -111,6 +111,17 @@ public class QuestionController {
     }
 
     /**
+     * 调整试题顺序
+     */
+    @ApiOperation("调整试题顺序")
+    @PutMapping("/{id}/sort")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<String> sortQuestion(@PathVariable("id") Integer id,
+                                       @RequestParam("direction") String direction) {
+        return iQuestionService.sortQuestion(id, direction);
+    }
+
+    /**
      * 批量导入试题
      *
      * @param id   题库Id
@@ -135,5 +146,18 @@ public class QuestionController {
     @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
     public Result<String> uploadImage(@RequestPart("file") MultipartFile file) {
         return fileService.uploadImage(file);
+    }
+
+    /**
+     * 上传试题音频
+     *
+     * @param file 文件
+     * @return 返回上传后的地址
+     */
+    @ApiOperation("上传音频")
+    @PostMapping("/uploadAudio")
+    @PreAuthorize("hasAnyAuthority('role_teacher','role_admin')")
+    public Result<String> uploadAudio(@RequestPart("file") MultipartFile file) {
+        return fileService.uploadAudio(file);
     }
 }

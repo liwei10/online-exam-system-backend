@@ -19,9 +19,11 @@
         select q.id,
         q.content,
         q.image,
+        q.audio,
         q.analysis,
         q.qu_type,
         q.repo_id,
+        q.level,
         r.title as repoTitle
         from t_question as q
         join t_repo as r on q.repo_id = r.id
@@ -42,6 +44,7 @@
                 and q.is_deleted = 0
             </if>
         </trim>
+        order by q.sort asc, q.create_time asc, q.id asc
     </select>
 
     <!-- 查询试题详细信息 -->
@@ -49,8 +52,10 @@
         select q.id,
         q.content,
         q.image,
+        q.audio,
         q.repo_id,
         q.qu_type,
+        q.level,
         r.title as repoTitle
         from t_question as q
         join t_repo as r on q.repo_id = r.id
@@ -63,6 +68,7 @@
         q.id,
         q.qu_type ,
         q.content,
+        q.level,
         r.title as repoTitle,
         q.create_time
         from t_question q
@@ -82,6 +88,7 @@
                 and q.user_id = #{userId}
             </if>
         </trim>
+        order by q.sort asc, q.create_time asc, q.id asc
     </select>
 
 </mapper>

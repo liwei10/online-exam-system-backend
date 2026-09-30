@@ -1,17 +1,18 @@
 package cn.org.alan.exam.service.impl;
 
+import java.text.DecimalFormat;
+
+import javax.annotation.Resource;
+
+import org.springframework.stereotype.Service;
+
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.mapper.ExamQuAnswerMapper;
 import cn.org.alan.exam.model.entity.ExamQuAnswer;
 import cn.org.alan.exam.model.vo.score.QuestionAnalyseVO;
 import cn.org.alan.exam.service.IExamQuAnswerService;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.springframework.stereotype.Service;
-
-import javax.annotation.Resource;
-import java.text.DecimalFormat;
-import java.util.List;
 
 /**
  * <p>

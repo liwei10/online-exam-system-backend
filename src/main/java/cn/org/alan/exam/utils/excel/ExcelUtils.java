@@ -61,8 +61,15 @@ public class ExcelUtils {
 
 
     public static boolean isExcel(String filename) {
-        String lastName = filename.substring(filename.indexOf(".") + 1);
-        return lastName.equalsIgnoreCase("xls") || lastName.equalsIgnoreCase("xlsx");
+        if (filename == null || filename.isEmpty()) {
+            return false;
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return false;
+        }
+        String ext = filename.substring(dot + 1);
+        return "xls".equalsIgnoreCase(ext) || "xlsx".equalsIgnoreCase(ext);
     }
 
     public static <T> List<T> readFile(File file, Class<T> clazz) throws Exception {

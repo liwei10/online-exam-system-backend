@@ -11,6 +11,7 @@
             r.create_time,
             r.is_exercise as isExercise,
             r.category_id as categoryId,
+            r.sort,
             (select count(q.id) from t_question q where q.repo_id = r.id and q.is_deleted = 0) as questionCount
         from t_repo r 
         join t_user u on r.user_id = u.id
@@ -25,26 +26,26 @@
             <if test='categoryId != null'>
                 and r.category_id = #{categoryId}
             </if>
+            <if test='isExercise != null'>
+                and r.is_exercise = #{isExercise}
+            </if>
         </trim>
+        order by r.sort asc, r.id asc
     </select>
 
-    <!-- 分页获取可刷题库信息 -->
+    <!-- 分页获取可刷题库信息：必须开启刷题且绑定学生所在班级（支持多班级） -->
     <select id="selectRepo" resultType="cn.org.alan.exam.model.vo.exercise.ExerciseRepoVO">
         select r.id, r.title as repoTitle, count(q.id) as totalCount, r.category_id as categoryId
         from t_repo as r
         join t_question as q on q.repo_id = r.id
+        join t_grade_exercise as ge on ge.repo_id = r.id
         <where>
             r.is_deleted = 0
             and r.is_exercise = 1
-            <if test="userList != null and userList.size() > 0">
-                and r.user_id in
-                <foreach collection="userList" item="uId" open="(" separator="," close=")">
-                    #{uId}
-                </foreach>
-            </if>
-            <if test="userList == null or userList.size() == 0">
-                and 1 = 0 <!-- 如果 userList 为空，使条件不成立 -->
-            </if>
+            and ge.grade_id in
+            <foreach collection="gradeIds" item="gid" open="(" separator="," close=")">
+                #{gid}
+            </foreach>
             <if test="title != null and title != ''">
                 and r.title like concat('%', #{title}, '%')
             </if>
@@ -85,6 +86,20 @@
         <if test="repoName!=null and repoName!=''">
             and r.title like concat('%',#{repoName},'%')
         </if>
+    </select>
+
+    <!-- 学生可刷题库涉及的分类 -->
+    <select id="selectExerciseCategoryIds" resultType="java.lang.Integer">
+        select distinct r.category_id
+        from t_repo as r
+        join t_grade_exercise as ge on ge.repo_id = r.id
+        where r.is_deleted = 0
+          and r.is_exercise = 1
+          and r.category_id is not null
+          and ge.grade_id in
+          <foreach collection="gradeIds" item="gid" open="(" separator="," close=")">
+              #{gid}
+          </foreach>
     </select>
 
 </mapper>

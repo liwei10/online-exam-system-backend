@@ -33,7 +33,7 @@ public class UserForm {
     private String password;
 
     // 真实姓名
-    @NotBlank(groups = {UserGroup.CreateUserGroup.class, UserGroup.RegisterGroup.class}, message = "真实姓名不能为空")
+    @NotBlank(groups = {UserGroup.CreateUserGroup.class, UserGroup.RegisterGroup.class, UserGroup.UpdateUserGroup.class, UserGroup.UpdateProfileGroup.class}, message = "真实姓名不能为空")
     @ExcelImport(value = "真实姓名*")
     private String realName;
 
@@ -41,8 +41,11 @@ public class UserForm {
     @ExcelImport(value = "角色")
     private Integer roleId;
 
-    // 班级ID
+    // 班级ID（兼容旧单班字段）
     private Integer gradeId;
+
+    // 学生多班级，逗号分隔，如 "1,2,3"
+    private String gradeIds;
 
     // 旧密码
     @NotBlank(groups = {UserGroup.UpdatePasswordGroup.class}, message = "原密码不能为空")

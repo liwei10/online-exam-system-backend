@@ -18,6 +18,7 @@
         g.user_id AS userId,
         u.user_name AS userName,
         g.code,
+        g.sort,
         (SELECT COUNT(*) FROM t_user k WHERE k.grade_id = g.id AND k.is_deleted = 0) AS gradeCount
         FROM t_grade g
         JOIN t_user u ON g.user_id = u.id
@@ -41,6 +42,7 @@
                 </if>
             </if>
         </where>
+        ORDER BY g.sort ASC, g.id ASC
     </select>
 
     <!-- 根据班级代码获取班级对象 -->
@@ -55,9 +57,6 @@
     <select id="getAllGrade" resultType="cn.org.alan.exam.model.vo.grade.GradeVO">
         select *
         from t_grade g
-        <if test="roleCode == 2">
-            right join t_user_grade ug on ug.g_id = g.id
-        </if>
         <where>
             g.is_deleted = 0
             <if test="roleCode == 2 ">
@@ -73,6 +72,7 @@
                 </if>
             </if>
         </where>
+        ORDER BY g.sort ASC, g.id ASC
     </select>
 
 </mapper>

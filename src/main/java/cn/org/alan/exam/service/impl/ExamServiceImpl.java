@@ -1,5 +1,9 @@
 package cn.org.alan.exam.service.impl;
 
+import cn.org.alan.exam.common.cache.CacheKeys;
+import cn.org.alan.exam.common.cache.CacheService;
+import cn.org.alan.exam.common.cache.OngoingExamCacheService;
+import cn.org.alan.exam.common.cache.QuContentCacheService;
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.ExamConverter;
@@ -7,14 +11,17 @@ import cn.org.alan.exam.converter.ExamQuAnswerConverter;
 import cn.org.alan.exam.mapper.*;
 import cn.org.alan.exam.model.entity.*;
 import cn.org.alan.exam.model.form.exam.ExamAddForm;
+import cn.org.alan.exam.model.form.exam.ExamQuestionUpdateForm;
 import cn.org.alan.exam.model.form.exam.ExamUpdateForm;
 import cn.org.alan.exam.model.form.exam_qu_answer.ExamQuAnswerAddForm;
 import cn.org.alan.exam.model.vo.exam.*;
+import cn.org.alan.exam.model.vo.question.QuContentShell;
 import cn.org.alan.exam.model.vo.record.ExamRecordDetailVO;
 import cn.org.alan.exam.service.IAutoScoringService;
 import cn.org.alan.exam.service.IExamService;
 import cn.org.alan.exam.service.IOptionService;
 import cn.org.alan.exam.service.IQuestionService;
+import cn.org.alan.exam.utils.BlankPlaceholderUtil;
 import cn.org.alan.exam.utils.ClassTokenGenerator;
 import cn.org.alan.exam.utils.SecurityUtil;
 import com.aliyun.oss.ServiceException;
@@ -32,6 +39,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -70,21 +78,46 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
     @Resource
     private UserMapper userMapper;
     @Resource
+    private GradeMapper gradeMapper;
+    @Resource
     private CertificateUserMapper certificateUserMapper;
     @Resource
+    private ManualScoreMapper manualScoreMapper;
+    @Resource
     private IAutoScoringService autoScoringService;
+    @Resource
+    private CacheService cacheService;
+    @Resource
+    private QuContentCacheService quContentCacheService;
+    @Resource
+    private OngoingExamCacheService ongoingExamCacheService;
+
+    private static final long EXAM_DETAIL_TTL_MINUTES = 60;
 
     @Override
     @Transactional
     public Result<String> createExam(ExamAddForm examAddForm) {
         // 将关于考试相关的实体转换为Exam
         Exam exam = examConverter.formToEntity(examAddForm);
+        // 填空题字段默认值
+        if (exam.getFillCount() == null) {
+            exam.setFillCount(0);
+        }
+        if (exam.getFillScore() == null) {
+            exam.setFillScore(0);
+        }
+        if (exam.getFillNeedMark() == null) {
+            exam.setFillNeedMark(0);
+        }
         // 添加考试信息到考试表
         // 计算总分
+        int fillCount = exam.getFillCount() == null ? 0 : exam.getFillCount();
+        int fillScore = exam.getFillScore() == null ? 0 : exam.getFillScore();
         int grossScore = examAddForm.getRadioCount() * examAddForm.getRadioScore()
                 + examAddForm.getMultiCount() * examAddForm.getMultiScore()
                 + examAddForm.getJudgeCount() * examAddForm.getJudgeScore()
-                + examAddForm.getSaqCount() * examAddForm.getSaqScore();
+                + examAddForm.getSaqCount() * examAddForm.getSaqScore()
+                + fillCount * fillScore;
         exam.setGrossScore(grossScore);
         // 添加考试信息到考试表
         int examRows = examMapper.insert(exam);
@@ -119,12 +152,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         quTypeToScore.put(2, exam.getMultiScore());
         quTypeToScore.put(3, exam.getJudgeScore());
         quTypeToScore.put(4, exam.getSaqScore());
+        quTypeToScore.put(5, exam.getFillScore());
         // <"试题类型"，"题目数量">
         Map<Integer, Integer> quTypeToCount = new HashMap<>();
         quTypeToCount.put(1, exam.getRadioCount());
         quTypeToCount.put(2, exam.getMultiCount());
         quTypeToCount.put(3, exam.getJudgeCount());
         quTypeToCount.put(4, exam.getSaqCount());
+        quTypeToCount.put(5, exam.getFillCount());
         int sortCounter = 0;
         // 自己选题
         if("0".equals(examAddForm.getAddQuype())){
@@ -153,6 +188,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             groupedQuestions.put(2, new ArrayList<>()); // 多选
             groupedQuestions.put(3, new ArrayList<>()); // 判断
             groupedQuestions.put(4, new ArrayList<>()); // 简答
+            groupedQuestions.put(5, new ArrayList<>()); // 填空
 
             // 为了保持组内相对顺序，我们需要遍历原始选择ID列表
             Map<Integer, Question> questionMap = selectedQuestions.stream()
@@ -245,59 +281,133 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
     }
 
     /**
-     * 获取试卷总分
-     *
-     * @param exam 试卷对象
-     * @return
+     * 获取试卷总分：优先按试卷内单题分值求和
      */
     public Integer getGrossScore(Exam exam) {
-        Integer grossScore = 0;
-        try {
-            grossScore = exam.getRadioCount() * exam.getRadioScore()
-                    + exam.getMultiCount() * exam.getMultiScore()
-                    + exam.getJudgeCount() * exam.getJudgeScore()
-                    + exam.getSaqCount() * exam.getSaqScore();
-        } catch (Exception e) {
-            throw new ServiceRuntimeException("计算总分时出现空指针异常:" + e.getMessage());
+        if (exam == null || exam.getId() == null) {
+            return 0;
         }
-        return grossScore;
+        LambdaQueryWrapper<ExamQuestion> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ExamQuestion::getExamId, exam.getId());
+        List<ExamQuestion> list = examQuestionMapper.selectList(wrapper);
+        if (list != null && !list.isEmpty()) {
+            return list.stream()
+                    .mapToInt(q -> q.getScore() == null ? 0 : q.getScore())
+                    .sum();
+        }
+        try {
+            return (exam.getRadioCount() == null ? 0 : exam.getRadioCount()) * (exam.getRadioScore() == null ? 0 : exam.getRadioScore())
+                    + (exam.getMultiCount() == null ? 0 : exam.getMultiCount()) * (exam.getMultiScore() == null ? 0 : exam.getMultiScore())
+                    + (exam.getJudgeCount() == null ? 0 : exam.getJudgeCount()) * (exam.getJudgeScore() == null ? 0 : exam.getJudgeScore())
+                    + (exam.getSaqCount() == null ? 0 : exam.getSaqCount()) * (exam.getSaqScore() == null ? 0 : exam.getSaqScore())
+                    + (exam.getFillCount() == null ? 0 : exam.getFillCount()) * (exam.getFillScore() == null ? 0 : exam.getFillScore());
+        } catch (Exception e) {
+            throw new ServiceRuntimeException("计算总分时出现异常:" + e.getMessage());
+        }
     }
 
     @Override
     @Transactional
     public Result<String> updateExam(ExamUpdateForm examUpdateForm, Integer examId) {
-        // 获取用户ID
-        Integer userId = SecurityUtil.getUserId();
-        // 更具ID获取试卷
         Exam examTemp = this.getById(examId);
-        // 获取试卷总分
-        Integer grossScore = getGrossScore(examTemp);
-        // Form转换为实体类
+        if (examTemp == null) {
+            return Result.failed("考试不存在");
+        }
         Exam exam = examConverter.formToEntity(examUpdateForm);
         exam.setId(examId);
-        // 设置总分
-        exam.setGrossScore(grossScore);
-        // 更新试卷
+        // 题型分仅作默认分；总分按试卷内单题分值求和
+        exam.setGrossScore(getGrossScore(examTemp));
         Integer resultRow = examMapper.updateById(exam);
         if (resultRow < 1) {
             throw new ServiceRuntimeException("修改试卷失败");
         }
+        // 更新班级关联
+        if (StringUtils.isNotBlank(examUpdateForm.getGradeIds())) {
+            LambdaQueryWrapper<ExamGrade> deleteWrapper = new LambdaQueryWrapper<>();
+            deleteWrapper.eq(ExamGrade::getExamId, examId);
+            examGradeMapper.delete(deleteWrapper);
+            List<Integer> gradeIds = Arrays.stream(examUpdateForm.getGradeIds().split(","))
+                    .map(String::trim)
+                    .filter(StringUtils::isNotBlank)
+                    .map(Integer::parseInt)
+                    .collect(Collectors.toList());
+            if (!gradeIds.isEmpty()) {
+                Integer gradeRows = examGradeMapper.addExamGrade(examId, gradeIds);
+                if (gradeRows < 1) {
+                    throw new ServiceRuntimeException("更新考试班级失败");
+                }
+            }
+        }
+        cacheService.delete(CacheKeys.examDetail(examId));
         return Result.success("修改试卷成功");
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Result<String> deleteExam(String ids) {
         // 将ID字符串转换为列表
         List<Integer> examIds = Arrays.stream(ids.split(","))
                 .map(Integer::parseInt)
                 .collect(Collectors.toList());
-        // 逻辑删除试卷
-        int row = examMapper.deleteBatchIds(examIds);
-        if (row < 1) {
-            throw new ServiceRuntimeException("删除失败，删除考试表时失败");
+        if (examIds.isEmpty()) {
+            throw new ServiceRuntimeException("未指定要删除的考试");
         }
-        return Result.success("删除试卷成功");
+
+        // 清除进行中考试 Redis 缓存
+        List<UserExamsScore> ongoingScores = userExamsScoreMapper.selectList(
+                new LambdaQueryWrapper<UserExamsScore>()
+                        .in(UserExamsScore::getExamId, examIds)
+                        .eq(UserExamsScore::getState, 0)
+                        .select(UserExamsScore::getUserId, UserExamsScore::getExamId));
+        if (ongoingScores != null) {
+            for (UserExamsScore score : ongoingScores) {
+                ongoingExamCacheService.untrack(score.getUserId(), score.getExamId());
+            }
+        }
+
+        // 人工评分依赖答题明细，先删
+        List<ExamQuAnswer> answers = examQuAnswerMapper.selectList(
+                new LambdaQueryWrapper<ExamQuAnswer>()
+                        .in(ExamQuAnswer::getExamId, examIds)
+                        .select(ExamQuAnswer::getId));
+        if (answers != null && !answers.isEmpty()) {
+            List<Integer> answerIds = answers.stream()
+                    .map(ExamQuAnswer::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            if (!answerIds.isEmpty()) {
+                manualScoreMapper.delete(new LambdaQueryWrapper<ManualScore>()
+                        .in(ManualScore::getExamQuAnswerId, answerIds));
+            }
+        }
+
+        // 作答明细、成绩、错题本、证书发放记录
+        examQuAnswerMapper.delete(new LambdaQueryWrapper<ExamQuAnswer>()
+                .in(ExamQuAnswer::getExamId, examIds));
+        userExamsScoreMapper.delete(new LambdaQueryWrapper<UserExamsScore>()
+                .in(UserExamsScore::getExamId, examIds));
+        userBookMapper.delete(new LambdaQueryWrapper<UserBook>()
+                .in(UserBook::getExamId, examIds));
+        certificateUserMapper.delete(new LambdaQueryWrapper<CertificateUser>()
+                .in(CertificateUser::getExamId, examIds));
+
+        // 组卷与班级、题库关联
+        examQuestionMapper.delete(new LambdaQueryWrapper<ExamQuestion>()
+                .in(ExamQuestion::getExamId, examIds));
+        examGradeMapper.delete(new LambdaQueryWrapper<ExamGrade>()
+                .in(ExamGrade::getExamId, examIds));
+        examRepoMapper.delete(new LambdaQueryWrapper<ExamRepo>()
+                .in(ExamRepo::getExamId, examIds));
+
+        // 试卷本体物理删除（绕过逻辑删除，避免脏数据堆积）
+        int row = examMapper.physicalDeleteByIds(examIds);
+        if (row < 1) {
+            throw new ServiceRuntimeException("删除失败，考试不存在或已删除");
+        }
+        for (Integer examId : examIds) {
+            cacheService.delete(CacheKeys.examDetail(examId));
+        }
+        return Result.success("删除试卷成功，相关作答与成绩已一并清除");
     }
 
     @Override
@@ -338,24 +448,24 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         }
         cl.add(Calendar.MINUTE, byId.getExamDuration());
         examQuestionListVO.setLeftSeconds((cl.getTimeInMillis() - System.currentTimeMillis()) / 1000);
-        // 添加不同类型的试题列表 1：单选 2：多选 3：判断 4：简答
-        for (Integer quType = 1; quType <= 4; quType++) {
+        // 一次查出本场已作答题目，避免按题 N+1 查库
+        LambdaQueryWrapper<ExamQuAnswer> answeredQuery = new LambdaQueryWrapper<>();
+        answeredQuery.eq(ExamQuAnswer::getExamId, examId)
+                .eq(ExamQuAnswer::getUserId, userId)
+                .select(ExamQuAnswer::getQuestionId);
+        Set<Integer> answeredQuIds = examQuAnswerMapper.selectList(answeredQuery).stream()
+                .map(ExamQuAnswer::getQuestionId)
+                .collect(Collectors.toSet());
+
+        // 添加不同类型的试题列表 1：单选 2：多选 3：判断 4：简答 5：填空
+        for (Integer quType = 1; quType <= 5; quType++) {
             // 根据考试ID和试题类型，获取考试与试题的关联列表
             List<ExamQuestion> examQuestionList = examQuestionMapper.getExamQuByExamIdAndQuType(examId, quType);
             // 转换实体类型
             List<ExamQuestionVO> examQuestionVOS = examConverter.examQuestionListEntityToVO(examQuestionList);
             // 遍历试卷和试题的关联
             for (ExamQuestionVO temp : examQuestionVOS) {
-                LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQueryWrapper = new LambdaQueryWrapper<>();
-                examQuAnswerLambdaQueryWrapper.eq(ExamQuAnswer::getQuestionId, temp.getQuestionId())
-                        .eq(ExamQuAnswer::getExamId, examId)
-                        .eq(ExamQuAnswer::getUserId, userId);
-                List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(examQuAnswerLambdaQueryWrapper);
-                if (examQuAnswers.size() > 0) {
-                    temp.setCheckout(true);
-                } else {
-                    temp.setCheckout(false);
-                }
+                temp.setCheckout(answeredQuIds.contains(temp.getQuestionId()));
             }
             if (examQuestionVOS.isEmpty()) {
                 continue;
@@ -373,6 +483,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             } else if (quType == 4) {
                 // 如果遍历到简答则添加到简答列表
                 examQuestionListVO.setSaqList(examQuestionVOS);
+            } else if (quType == 5) {
+                examQuestionListVO.setFillList(examQuestionVOS);
             }
         }
         return Result.success("查询成功", examQuestionListVO);
@@ -390,26 +502,39 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                 .eq(ExamQuestion::getExamId, examId);
         ExamQuestion examQuestion = examQuestionMapper.selectOne(examQuestionLambdaQueryWrapper);
         examQuDetailVO.setSort(examQuestion.getSort());
-        // 问题
-        Question quById = questionService.getById(quId);
-        // 基本信息
-        examQuDetailVO.setImage(quById.getImage());
-        examQuDetailVO.setContent(quById.getContent());
-        examQuDetailVO.setQuType(quById.getQuType());
-        // 答案列表
-        LambdaQueryWrapper<Option> optionLambdaQuery = new LambdaQueryWrapper<>();
-        optionLambdaQuery.eq(Option::getQuId, quId);
-        List<Option> list = optionMapper.selectList(optionLambdaQuery);
-        List<OptionVO> optionVOS = examConverter.opListEntityToVO(list);
-        for (OptionVO temp : optionVOS) {
 
-            LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQueryWrapper = new LambdaQueryWrapper<>();
-            examQuAnswerLambdaQueryWrapper.eq(ExamQuAnswer::getQuestionId, temp.getQuId())
-                    .eq(ExamQuAnswer::getExamId, examId)
-                    .eq(ExamQuAnswer::getUserId, SecurityUtil.getUserId());
-            List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(examQuAnswerLambdaQueryWrapper);
+        // 题目内容壳优先走 Redis（不含正确答案 / 用户作答）
+        QuContentShell shell = quContentCacheService.getShell(quId);
+        if (shell == null) {
+            return Result.failed("试题不存在");
+        }
+        examQuDetailVO.setImage(shell.getImage());
+        examQuDetailVO.setAudio(shell.getAudio());
+        examQuDetailVO.setContent(shell.getContent());
+        examQuDetailVO.setQuType(shell.getQuType());
+        List<OptionVO> optionVOS = quContentCacheService.toOptionVOList(shell);
+        // 简答题选项内容是标准答案，考试中不下发
+        if (shell.getQuType() != null && shell.getQuType() == 4) {
+            for (OptionVO opt : optionVOS) {
+                opt.setContent("");
+            }
+        }
+        // 填空题作答中不展示标准答案，仅保留空位信息（id/sort）
+        if (shell.getQuType() != null && shell.getQuType() == 5) {
+            for (OptionVO opt : optionVOS) {
+                opt.setContent("");
+            }
+        }
 
-            if (examQuAnswers.size() > 0) {
+        // 叠加当前用户作答状态（不缓存）
+        LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        examQuAnswerLambdaQueryWrapper.eq(ExamQuAnswer::getQuestionId, quId)
+                .eq(ExamQuAnswer::getExamId, examId)
+                .eq(ExamQuAnswer::getUserId, SecurityUtil.getUserId());
+        List<ExamQuAnswer> examQuAnswers = examQuAnswerMapper.selectList(examQuAnswerLambdaQueryWrapper);
+
+        if (examQuAnswers != null && !examQuAnswers.isEmpty()) {
+            for (OptionVO temp : optionVOS) {
                 for (ExamQuAnswer temp1 : examQuAnswers) {
                     Integer questionType = temp1.getQuestionType();
                     String answerId = temp1.getAnswerId();
@@ -425,7 +550,6 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                             }
                             break;
                         case 2:
-                            // 解析用户作答
                             List<Integer> quIds = Arrays.stream(temp1.getAnswerId().split(","))
                                     .map(Integer::parseInt)
                                     .collect(Collectors.toList());
@@ -436,18 +560,28 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                             }
                             break;
                         case 4:
-                            temp.setContent(answerContent);
+                            examQuDetailVO.setUserAnswer(answerContent);
                             examQuDetailVO.setAnswerList(optionVOS);
+                            break;
+                        case 5:
+                            examQuDetailVO.setUserAnswer(answerContent);
                             break;
                         default:
                             break;
                     }
                 }
-                ;
             }
-
         }
-        if (quById.getQuType() != 4) {
+        Integer shellQuType = shell.getQuType();
+        if (shellQuType != null && shellQuType == 5) {
+            // 考试中不下发标准答案，仅保留空位占位（空 content）
+            for (OptionVO vo : optionVOS) {
+                vo.setContent("");
+            }
+            examQuDetailVO.setAnswerList(optionVOS);
+        } else if (shellQuType == null || shellQuType != 4) {
+            examQuDetailVO.setAnswerList(optionVOS);
+        } else if (examQuDetailVO.getAnswerList() == null) {
             examQuDetailVO.setAnswerList(optionVOS);
         }
         return Result.success("获取成功", examQuDetailVO);
@@ -475,6 +609,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             ExamQuCollectVO examQuCollectVO = new ExamQuCollectVO();
             // 设置标题
             examQuCollectVO.setTitle(temp.getContent());
+            examQuCollectVO.setImage(temp.getImage());
+            examQuCollectVO.setAudio(temp.getAudio());
             examQuCollectVO.setQuType(temp.getQuType());
             // 设置题目ID
             examQuCollectVO.setId(temp.getId());
@@ -483,7 +619,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             LambdaQueryWrapper<Option> optionWrapper = new LambdaQueryWrapper<>();
             optionWrapper.eq(Option::getQuId, temp.getId());
             List<Option> options = optionMapper.selectList(optionWrapper);
-            if (temp.getQuType() == 4) {
+            if (temp.getQuType() == 4 || temp.getQuType() == 5) {
                 examQuCollectVO.setOption(null);
             } else {
                 examQuCollectVO.setOption(options);
@@ -537,6 +673,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                     examQuCollectVO.setMyOption(Integer.toString(op3.getSort()));
                     break;
                 case 4:
+                case 5:
                     examQuCollectVO.setMyOption(examQuAnswer.getAnswerContent());
                     break;
                 default:
@@ -550,14 +687,39 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
 
     @Override
     public Result<ExamDetailVO> getDetail(Integer examId) {
+        String cacheKey = CacheKeys.examDetail(examId);
+        ExamDetailVO cached = cacheService.get(cacheKey);
+        if (cached != null) {
+            return Result.success("查询成功", cached);
+        }
         // 查询考试详情信息
         Exam exam = this.getById(examId);
+        if (exam == null) {
+            return Result.failed("考试不存在");
+        }
         // 实体转换
         ExamDetailVO examDetailVO = examConverter.examToExamDetailVO(exam);
         LambdaQueryWrapper<User> userLambdaQueryWrapper = new LambdaQueryWrapper<>();
         userLambdaQueryWrapper.eq(User::getId, examDetailVO.getUserId());
         User user = userMapper.selectOne(userLambdaQueryWrapper);
-        examDetailVO.setUsername(user.getUserName());
+        if (user != null) {
+            examDetailVO.setUsername(user.getUserName());
+        }
+        // 关联班级
+        LambdaQueryWrapper<ExamGrade> examGradeWrapper = new LambdaQueryWrapper<>();
+        examGradeWrapper.eq(ExamGrade::getExamId, examId);
+        List<ExamGrade> examGrades = examGradeMapper.selectList(examGradeWrapper);
+        List<Integer> gradeIds = examGrades.stream()
+                .map(ExamGrade::getGradeId)
+                .collect(Collectors.toList());
+        examDetailVO.setGradeIds(gradeIds);
+        if (!gradeIds.isEmpty()) {
+            List<Grade> grades = gradeMapper.selectBatchIds(gradeIds);
+            examDetailVO.setGradeNames(grades.stream().map(Grade::getGradeName).collect(Collectors.toList()));
+        } else {
+            examDetailVO.setGradeNames(Collections.emptyList());
+        }
+        cacheService.set(cacheKey, examDetailVO, EXAM_DETAIL_TTL_MINUTES, TimeUnit.MINUTES);
         return Result.success("查询成功", examDetailVO);
     }
 
@@ -670,6 +832,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                 }
                 examQuAnswerMapper.insert(examQuAnswer);
                 return Result.success("请求成功");
+            case 5:
+                int[] fillGrade = gradeFillAnswer(examQuAnswerForm.getExamId(), examQuAnswerForm.getQuId(),
+                        examQuAnswerForm.getAnswer());
+                examQuAnswer.setAnswerContent(examQuAnswerForm.getAnswer());
+                examQuAnswer.setIsRight(fillGrade[0]);
+                examQuAnswer.setEarnedScore(fillGrade[1]);
+                examQuAnswerMapper.insert(examQuAnswer);
+                return Result.success("请求成功");
             default:
                 return Result.failed("请求错误，请联系管理员解决");
         }
@@ -766,6 +936,18 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
                         .set(ExamQuAnswer::getAnswerContent, examQuAnswerForm.getAnswer());
                 examQuAnswerMapper.update(null, updateWrapper4);
                 return Result.success("请求成功");
+            case 5:
+                int[] fillGradeUpdate = gradeFillAnswer(examQuAnswerForm.getExamId(), examQuAnswerForm.getQuId(),
+                        examQuAnswerForm.getAnswer());
+                LambdaUpdateWrapper<ExamQuAnswer> updateWrapper5 = new LambdaUpdateWrapper<>();
+                updateWrapper5.eq(ExamQuAnswer::getUserId, SecurityUtil.getUserId())
+                        .eq(ExamQuAnswer::getExamId, examQuAnswerForm.getExamId())
+                        .eq(ExamQuAnswer::getQuestionId, examQuAnswerForm.getQuId())
+                        .set(ExamQuAnswer::getAnswerContent, examQuAnswerForm.getAnswer())
+                        .set(ExamQuAnswer::getIsRight, fillGradeUpdate[0])
+                        .set(ExamQuAnswer::getEarnedScore, fillGradeUpdate[1]);
+                examQuAnswerMapper.update(null, updateWrapper5);
+                return Result.success("请求成功");
             default:
                 return Result.failed("请求错误，请联系管理员解决");
         }
@@ -775,7 +957,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
     public ExamQuAnswer prepareExamQuAnswer(ExamQuAnswerAddForm form, Integer quType) {
         // 表单转换实体
         ExamQuAnswer examQuAnswer = examQuAnswerConverter.formToEntity(form);
-        if (quType == 4) {
+        if (quType == 4 || quType == 5) {
             examQuAnswer.setAnswerContent(form.getAnswer());
         } else {
             examQuAnswer.setAnswerId(form.getAnswer());
@@ -801,69 +983,187 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
 
     @Override
     public Result<List<ExamRecordDetailVO>> details(Integer examId) {
-        // 1、题干 2、选项 3、自己的答案 4、正确的答案 5、是否正确 6、试题分析
         List<ExamRecordDetailVO> examRecordDetailVOS = new ArrayList<>();
-        // 查询该考试的试题
         LambdaQueryWrapper<ExamQuestion> examQuestionWrapper = new LambdaQueryWrapper<>();
         examQuestionWrapper.eq(ExamQuestion::getExamId, examId)
                 .orderByAsc(ExamQuestion::getSort);
         List<ExamQuestion> examQuestions = examQuestionMapper.selectList(examQuestionWrapper);
+        if (examQuestions == null || examQuestions.isEmpty()) {
+            return Result.success("查询考试的信息成功", examRecordDetailVOS);
+        }
         List<Integer> quIds = examQuestions.stream()
                 .map(ExamQuestion::getQuestionId)
                 .collect(Collectors.toList());
-        // 查询题干列表
         List<Question> questions = questionMapper.selectBatchIds(quIds);
-        for (Question temp : questions) {
-            // 创建返回对象
+        Map<Integer, Question> questionMap = questions.stream()
+                .collect(Collectors.toMap(Question::getId, q -> q, (a, b) -> a));
+
+        // 按试卷内排序返回，并带上 questionId
+        for (ExamQuestion examQuestion : examQuestions) {
+            Question temp = questionMap.get(examQuestion.getQuestionId());
+            if (temp == null) {
+                continue;
+            }
             ExamRecordDetailVO examRecordDetailVO = new ExamRecordDetailVO();
-            // 设置标题
+            examRecordDetailVO.setQuestionId(temp.getId());
             examRecordDetailVO.setImage(temp.getImage());
+            examRecordDetailVO.setAudio(temp.getAudio());
             examRecordDetailVO.setTitle(temp.getContent());
             examRecordDetailVO.setQuType(temp.getQuType());
-            // 设置分析
+            examRecordDetailVO.setLevel(temp.getLevel());
+            examRecordDetailVO.setScore(examQuestion.getScore());
             examRecordDetailVO.setAnalyse(temp.getAnalysis());
-            // 查询试题选项
+
             LambdaQueryWrapper<Option> optionWrapper = new LambdaQueryWrapper<>();
-            optionWrapper.eq(Option::getQuId, temp.getId());
+            optionWrapper.eq(Option::getQuId, temp.getId()).orderByAsc(Option::getSort);
             List<Option> options = optionMapper.selectList(optionWrapper);
             if (temp.getQuType() == 4) {
                 examRecordDetailVO.setOption(null);
+                if (options != null && !options.isEmpty()) {
+                    examRecordDetailVO.setRightOption(options.get(0).getContent());
+                }
+            } else if (temp.getQuType() == 5) {
+                examRecordDetailVO.setOption(options);
+                if (options != null && !options.isEmpty()) {
+                    examRecordDetailVO.setRightOption(options.stream()
+                            .map(Option::getContent)
+                            .collect(Collectors.joining(BlankPlaceholderUtil.ANSWER_DELIMITER)));
+                }
             } else {
                 examRecordDetailVO.setOption(options);
-            }
-
-            // 查询试题类型
-            LambdaQueryWrapper<Question> QuWrapper = new LambdaQueryWrapper<>();
-            QuWrapper.eq(Question::getId, temp.getId());
-            Question qu = questionMapper.selectOne(QuWrapper);
-            Integer quType = qu.getQuType();
-            // 设置正确答案
-            LambdaQueryWrapper<Option> opWrapper = new LambdaQueryWrapper<>();
-            opWrapper.eq(Option::getQuId, temp.getId());
-            List<Option> opList = optionMapper.selectList(opWrapper);
-
-            if (temp.getQuType() == 4 && opList.size() > 0) {
-                examRecordDetailVO.setRightOption(opList.get(0).getContent());
-            } else {
-                String current = "";
-                ArrayList<Integer> strings = new ArrayList<>();
-                for (Option temp1 : options) {
-                    if (temp1.getIsRight() == 1) {
-                        strings.add(temp1.getSort());
+                List<Integer> rightSorts = new ArrayList<>();
+                for (Option opt : options) {
+                    if (opt.getIsRight() != null && opt.getIsRight() == 1) {
+                        rightSorts.add(opt.getSort());
                     }
                 }
-                List<String> stringList = strings.stream().map(String::valueOf).collect(Collectors.toList());
-                String result = String.join(",", stringList);
-
-                examRecordDetailVO.setRightOption(result);
+                examRecordDetailVO.setRightOption(
+                        rightSorts.stream().map(String::valueOf).collect(Collectors.joining(","))
+                );
             }
             examRecordDetailVOS.add(examRecordDetailVO);
         }
-        if (examRecordDetailVOS == null) {
-            throw new ServiceRuntimeException("查询考试的信息失败");
-        }
         return Result.success("查询考试的信息成功", examRecordDetailVOS);
+    }
 
+    @Override
+    @Transactional
+    public Result<String> updateExamQuestions(Integer examId, ExamQuestionUpdateForm form) {
+        Exam exam = this.getById(examId);
+        if (exam == null || (exam.getIsDeleted() != null && exam.getIsDeleted() == 1)) {
+            return Result.failed("考试不存在");
+        }
+        List<Integer> selectedQuIds = Arrays.stream(form.getQuIds().split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .map(Integer::parseInt)
+                .distinct()
+                .collect(Collectors.toList());
+        if (selectedQuIds.isEmpty()) {
+            return Result.failed("试题不能为空");
+        }
+        List<Question> selectedQuestions = questionMapper.selectBatchIds(selectedQuIds);
+        if (selectedQuestions == null || selectedQuestions.isEmpty()) {
+            return Result.failed("所选试题不存在");
+        }
+        Map<Integer, Question> questionMap = selectedQuestions.stream()
+                .collect(Collectors.toMap(Question::getId, q -> q, (a, b) -> a));
+
+        Map<Integer, Integer> quTypeToScore = new HashMap<>();
+        quTypeToScore.put(1, form.getRadioScore() == null ? 0 : form.getRadioScore());
+        quTypeToScore.put(2, form.getMultiScore() == null ? 0 : form.getMultiScore());
+        quTypeToScore.put(3, form.getJudgeScore() == null ? 0 : form.getJudgeScore());
+        quTypeToScore.put(4, form.getSaqScore() == null ? 0 : form.getSaqScore());
+        quTypeToScore.put(5, form.getFillScore() == null ? 0 : form.getFillScore());
+
+        // 单题分值覆盖：questionId -> score
+        Map<Integer, Integer> quScoreMap = new HashMap<>();
+        if (StringUtils.isNotBlank(form.getQuScores())) {
+            for (String part : form.getQuScores().split(",")) {
+                String[] kv = part.trim().split(":");
+                if (kv.length != 2) {
+                    continue;
+                }
+                try {
+                    Integer qid = Integer.valueOf(kv[0].trim());
+                    Integer sc = Integer.valueOf(kv[1].trim());
+                    if (sc < 0) {
+                        throw new ServiceRuntimeException("题目分值不能为负数");
+                    }
+                    quScoreMap.put(qid, sc);
+                } catch (NumberFormatException e) {
+                    throw new ServiceRuntimeException("题目分值格式错误，应为 questionId:score");
+                }
+            }
+        }
+
+        Map<Integer, List<Question>> groupedQuestions = new LinkedHashMap<>();
+        groupedQuestions.put(1, new ArrayList<>());
+        groupedQuestions.put(2, new ArrayList<>());
+        groupedQuestions.put(3, new ArrayList<>());
+        groupedQuestions.put(4, new ArrayList<>());
+        groupedQuestions.put(5, new ArrayList<>());
+        for (Integer quId : selectedQuIds) {
+            Question question = questionMap.get(quId);
+            if (question != null && groupedQuestions.containsKey(question.getQuType())) {
+                groupedQuestions.get(question.getQuType()).add(question);
+            }
+        }
+
+        int radioCount = groupedQuestions.get(1).size();
+        int multiCount = groupedQuestions.get(2).size();
+        int judgeCount = groupedQuestions.get(3).size();
+        int saqCount = groupedQuestions.get(4).size();
+        int fillCount = groupedQuestions.get(5).size();
+
+        // 先删旧关联再插入
+        LambdaQueryWrapper<ExamQuestion> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(ExamQuestion::getExamId, examId);
+        examQuestionMapper.delete(deleteWrapper);
+
+        int sortCounter = 0;
+        int grossScore = 0;
+        for (Map.Entry<Integer, List<Question>> entry : groupedQuestions.entrySet()) {
+            Integer quType = entry.getKey();
+            Integer typeDefault = quTypeToScore.get(quType);
+            for (Question question : entry.getValue()) {
+                Integer quScore = quScoreMap.containsKey(question.getId())
+                        ? quScoreMap.get(question.getId())
+                        : typeDefault;
+                if (quScore == null) {
+                    quScore = 0;
+                }
+                grossScore += quScore;
+                Map<String, Object> detail = new HashMap<>();
+                detail.put("questionId", question.getId());
+                detail.put("sort", sortCounter++);
+                int rows = examQuestionMapper.insertSingleQuestion(examId, quType, quScore, detail);
+                if (rows < 1) {
+                    throw new ServiceRuntimeException("更新试题失败, Question ID: " + question.getId());
+                }
+            }
+        }
+
+        Exam update = new Exam();
+        update.setId(examId);
+        update.setRadioCount(radioCount);
+        update.setMultiCount(multiCount);
+        update.setJudgeCount(judgeCount);
+        update.setSaqCount(saqCount);
+        update.setFillCount(fillCount);
+        update.setRadioScore(form.getRadioScore());
+        update.setMultiScore(form.getMultiScore());
+        update.setJudgeScore(form.getJudgeScore());
+        update.setSaqScore(form.getSaqScore());
+        update.setFillScore(form.getFillScore());
+        update.setFillNeedMark(form.getFillNeedMark() == null ? 0 : form.getFillNeedMark());
+        update.setGrossScore(grossScore);
+        int updated = examMapper.updateById(update);
+        if (updated < 1) {
+            throw new ServiceRuntimeException("更新考试分值失败");
+        }
+        cacheService.delete(CacheKeys.examDetail(examId));
+        return Result.success("更新试题成功");
     }
 
     @Override
@@ -943,20 +1243,71 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             }
         }
 
+        // 查询用户未作答的填空题，并添加默认空白作答
+        List<ExamQuestion> unansweredFillQuestions = examQuestionMapper.getUnansweredFillQuestions(examId, SecurityUtil.getUserId());
+        if (unansweredFillQuestions != null && !unansweredFillQuestions.isEmpty()) {
+            for (ExamQuestion question : unansweredFillQuestions) {
+                ExamQuAnswer examQuAnswer = new ExamQuAnswer();
+                examQuAnswer.setExamId(examId);
+                examQuAnswer.setUserId(SecurityUtil.getUserId());
+                examQuAnswer.setQuestionId(question.getQuestionId());
+                examQuAnswer.setQuestionType(5);
+                examQuAnswer.setAnswerContent("");
+                int[] fillGrade = gradeFillAnswer(examId, question.getQuestionId(), "");
+                examQuAnswer.setIsRight(fillGrade[0]);
+                examQuAnswer.setEarnedScore(fillGrade[1]);
+                examQuAnswerMapper.insert(examQuAnswer);
+            }
+        }
+
         // 查询用户答题记录
         LambdaQueryWrapper<ExamQuAnswer> examQuAnswerLambdaQuery = new LambdaQueryWrapper<>();
         examQuAnswerLambdaQuery.eq(ExamQuAnswer::getUserId, SecurityUtil.getUserId())
                 .eq(ExamQuAnswer::getExamId, examId);
         List<ExamQuAnswer> examQuAnswer = examQuAnswerMapper.selectList(examQuAnswerLambdaQuery);
 
+        // 单题分值映射（优先），按题型默认分兜底
+        LambdaQueryWrapper<ExamQuestion> eqWrapper = new LambdaQueryWrapper<>();
+        eqWrapper.eq(ExamQuestion::getExamId, examId);
+        List<ExamQuestion> examQuestionList = examQuestionMapper.selectList(eqWrapper);
+        Map<Integer, Integer> quScoreMap = examQuestionList.stream()
+                .collect(Collectors.toMap(ExamQuestion::getQuestionId, ExamQuestion::getScore, (a, b) -> a));
+
         // 计算客观分 & 收集错题
         List<UserBook> userBookArrayList = new ArrayList<>();
         int calculatedScore = 0; // 使用局部变量计算分数
+        boolean autoAddFillScore = examOne.getFillNeedMark() == null || examOne.getFillNeedMark() == 0;
         for (ExamQuAnswer temp : examQuAnswer) {
+            Integer questionType = temp.getQuestionType();
+            // 填空题：重算实得分；仅在无需人工阅卷时计入总分；不走 isRight==1 满分路径
+            if (questionType != null && questionType == 5) {
+                int[] fillGrade = gradeFillAnswer(examId, temp.getQuestionId(), temp.getAnswerContent());
+                temp.setIsRight(fillGrade[0]);
+                temp.setEarnedScore(fillGrade[1]);
+                LambdaUpdateWrapper<ExamQuAnswer> fillScoreUpdate = new LambdaUpdateWrapper<>();
+                fillScoreUpdate.eq(ExamQuAnswer::getId, temp.getId())
+                        .set(ExamQuAnswer::getIsRight, fillGrade[0])
+                        .set(ExamQuAnswer::getEarnedScore, fillGrade[1]);
+                examQuAnswerMapper.update(null, fillScoreUpdate);
+                if (autoAddFillScore) {
+                    calculatedScore += fillGrade[1];
+                }
+                if (fillGrade[0] == 0) {
+                    UserBook userBook = new UserBook();
+                    userBook.setExamId(examId);
+                    userBook.setUserId(SecurityUtil.getUserId());
+                    userBook.setQuId(temp.getQuestionId());
+                    userBook.setCreateTime(nowTime);
+                    userBookArrayList.add(userBook);
+                }
+                continue;
+            }
             // 添加 null 检查防止 NPE
             if (temp.getIsRight() != null && temp.getIsRight() == 1) {
-                Integer questionType = temp.getQuestionType();
-                if (questionType != null) {
+                Integer quScore = quScoreMap.get(temp.getQuestionId());
+                if (quScore != null) {
+                    calculatedScore += quScore;
+                } else if (questionType != null) {
                     if (questionType == 1 && examOne.getRadioScore() != null) {
                         calculatedScore += examOne.getRadioScore();
                     } else if (questionType == 2 && examOne.getMultiScore() != null) {
@@ -986,8 +1337,11 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
 
         // 确定是否需要人工阅卷
         int whetherMark = -1; // 默认无需阅卷
-        if (examOne.getSaqCount() != null && examOne.getSaqCount() > 0) {
-            whetherMark = 0; // 有简答题，设置为待阅卷
+        boolean needMark = (examOne.getSaqCount() != null && examOne.getSaqCount() > 0)
+                || (examOne.getFillCount() != null && examOne.getFillCount() > 0
+                && examOne.getFillNeedMark() != null && examOne.getFillNeedMark() == 1);
+        if (needMark) {
+            whetherMark = 0; // 有简答题或需人工阅卷的填空题，设置为待阅卷
         }
 
         LambdaUpdateWrapper<UserExamsScore> userExamsScoreLambdaUpdate = new LambdaUpdateWrapper<>();
@@ -1009,11 +1363,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
             // 尝试查询当前记录状态以提供更具体的错误信息
             UserExamsScore latestScore = userExamsScoreMapper.selectOne(userScoreQuery.last("limit 1")); // 重新查询一次确保状态
             if (latestScore != null && latestScore.getState() != 0) {
+                ongoingExamCacheService.untrack(SecurityUtil.getUserId(), examId);
                 return Result.failed("交卷失败，考试已被提交或状态异常。");
             } else {
                 return Result.failed("交卷失败，更新记录时发生未知错误。");
             }
         }
+
+        ongoingExamCacheService.untrack(SecurityUtil.getUserId(), examId);
 
         // 如果需要阅卷，调用自动评分
         if (whetherMark == 0) {
@@ -1055,6 +1412,14 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         if (rows == 0) {
             return Result.failed("访问失败");
         }
+        // 开考写入 Redis，供自动交卷定时任务判超时
+        if (userExamsScore.getUserId() == null) {
+            userExamsScore.setUserId(SecurityUtil.getUserId());
+        }
+        if (userExamsScore.getCreateTime() == null) {
+            userExamsScore.setCreateTime(LocalDateTime.now());
+        }
+        ongoingExamCacheService.track(userExamsScore, exam);
         return Result.success("已开始考试");
     }
 
@@ -1066,5 +1431,28 @@ public class ExamServiceImpl extends ServiceImpl<ExamMapper, Exam> implements IE
         UserExamsScore userExamsScore = userExamsScoreMapper.selectOne(userExamsScoreLambdaQueryWrapper);
         LocalDateTime createTime = userExamsScore.getCreateTime();
         return createTime;
+    }
+
+    /**
+     * 填空题自动判分
+     * @return int[0]=isRight(1全对), int[1]=earnedScore
+     */
+    private int[] gradeFillAnswer(Integer examId, Integer quId, String answerContent) {
+        LambdaQueryWrapper<Option> optionWrapper = new LambdaQueryWrapper<>();
+        optionWrapper.eq(Option::getQuId, quId).orderByAsc(Option::getSort);
+        List<Option> options = optionMapper.selectList(optionWrapper);
+        List<String> standards = options.stream().map(Option::getContent).collect(Collectors.toList());
+        List<String> userAnswers = BlankPlaceholderUtil.splitAnswers(answerContent);
+        int correct = BlankPlaceholderUtil.countCorrect(userAnswers, standards);
+        int questionScore = 0;
+        LambdaQueryWrapper<ExamQuestion> eqWrapper = new LambdaQueryWrapper<>();
+        eqWrapper.eq(ExamQuestion::getExamId, examId).eq(ExamQuestion::getQuestionId, quId);
+        ExamQuestion examQuestion = examQuestionMapper.selectOne(eqWrapper);
+        if (examQuestion != null && examQuestion.getScore() != null) {
+            questionScore = examQuestion.getScore();
+        }
+        int earned = BlankPlaceholderUtil.calcEarnedScore(questionScore, correct, standards.size());
+        int isRight = (!standards.isEmpty() && correct == standards.size()) ? 1 : 0;
+        return new int[]{isRight, earned};
     }
 }

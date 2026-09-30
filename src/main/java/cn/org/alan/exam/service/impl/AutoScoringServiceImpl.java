@@ -1,17 +1,10 @@
 package cn.org.alan.exam.service.impl;
 
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import cn.org.alan.exam.common.exception.ServiceRuntimeException;
-import cn.org.alan.exam.mapper.ExamQuAnswerMapper;
-import cn.org.alan.exam.model.entity.ExamQuAnswer;
-import cn.org.alan.exam.service.IAuthService;
-import cn.org.alan.exam.utils.agent.AIChat;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import cn.org.alan.exam.model.vo.question.QuestionScoreVO;
-import cn.org.alan.exam.service.IAutoScoringService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -20,10 +13,18 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
 
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
+import cn.org.alan.exam.common.exception.ServiceRuntimeException;
+import cn.org.alan.exam.mapper.ExamQuAnswerMapper;
+import cn.org.alan.exam.model.entity.ExamQuAnswer;
+import cn.org.alan.exam.model.vo.question.QuestionScoreVO;
+import cn.org.alan.exam.service.IAutoScoringService;
+import cn.org.alan.exam.utils.agent.AIChat;
 
 @Service
 public class AutoScoringServiceImpl extends ServiceImpl<ExamQuAnswerMapper, ExamQuAnswer> implements IAutoScoringService {

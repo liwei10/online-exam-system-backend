@@ -1,11 +1,10 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.User;
-import cn.org.alan.exam.model.entity.UserGrade;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+
+import cn.org.alan.exam.model.entity.UserGrade;
 
 /**
  * 教师与班级关联表 Mapper 接口
@@ -25,6 +24,11 @@ public interface UserGradeMapper extends BaseMapper<UserGrade> {
     List<Integer> getUserListByGradeId(Integer gradeId);
 
     /**
+     * 根据班级id获取关联教师详情
+     */
+    List<cn.org.alan.exam.model.vo.grade.GradeTeacherVO> getTeacherListByGradeId(Integer gradeId);
+
+    /**
      * 老师退出班级
      *
      * @param userId  用户ID
@@ -40,5 +44,15 @@ public interface UserGradeMapper extends BaseMapper<UserGrade> {
      * @return 结果集
      */
     List<Integer> getGradeIdListByUserId(Integer userId);
+
+    /**
+     * 获取学生关联的所有班级ID（t_user_grade + 兼容 t_user.grade_id）
+     */
+    List<Integer> getStudentGradeIdList(Integer userId);
+
+    /**
+     * 物理删除用户全部班级关联（避免唯一键与逻辑删除冲突）
+     */
+    int deleteByUserId(Integer userId);
 
 }

@@ -142,6 +142,17 @@ public class GradeController {
     }
 
     /**
+     * 管理员解除教师与班级关联
+     */
+    @ApiOperation("解除教师班级关联")
+    @DeleteMapping("/{gradeId}/teacher/{teacherId}")
+    @PreAuthorize("hasAnyAuthority('role_admin')")
+    public Result<String> removeTeacherFromGrade(@PathVariable("gradeId") Integer gradeId,
+                                                 @PathVariable("teacherId") Integer teacherId) {
+        return gradeService.removeTeacherFromGrade(gradeId, teacherId);
+    }
+
+    /**
      * 学生退出班级
      *
      * @return
@@ -149,7 +160,15 @@ public class GradeController {
     @ApiOperation("学生退出班级")
     @PutMapping("/user/exit")
     @PreAuthorize("hasAnyAuthority('role_student')")
-    public Result userExitGrade() {
-        return gradeService.userExitGrade();
+    public Result userExitGrade(@RequestParam(value = "gradeId", required = false) Integer gradeId) {
+        return gradeService.userExitGrade(gradeId);
+    }
+
+    @ApiOperation("班级上移/下移")
+    @PutMapping("/{id}/sort")
+    @PreAuthorize("hasAnyAuthority('role_admin')")
+    public Result<String> sortGrade(@PathVariable("id") Integer id,
+                                    @RequestParam("direction") String direction) {
+        return gradeService.sortGrade(id, direction);
     }
 }

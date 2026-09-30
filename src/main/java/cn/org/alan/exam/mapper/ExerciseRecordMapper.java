@@ -1,9 +1,8 @@
 package cn.org.alan.exam.mapper;
 
-import cn.org.alan.exam.model.entity.ExerciseRecord;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
-import java.util.List;
+import cn.org.alan.exam.model.entity.ExerciseRecord;
 
 /**
  * 刷题记录表 Mapper 接口

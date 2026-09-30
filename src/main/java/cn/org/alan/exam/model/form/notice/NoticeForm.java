@@ -1,9 +1,8 @@
 package cn.org.alan.exam.model.form.notice;
 
-import cn.org.alan.exam.common.result.Result;
-import lombok.Data;
-
 import javax.validation.constraints.NotBlank;
+
+import lombok.Data;
 
 /**
  * @Author Alan

@@ -1,9 +1,8 @@
 package cn.org.alan.exam.model.vo.exam;
 
-import cn.org.alan.exam.model.entity.Option;
-import lombok.Data;
-
 import java.util.List;
+
+import lombok.Data;
 
 /**
  * @Author Alan
@@ -20,6 +19,11 @@ public class ExamQuDetailVO {
     private String image;
 
     /**
+     * 音频
+     */
+    private String audio;
+
+    /**
      * 题目内容
      */
     private String content;
@@ -33,5 +37,10 @@ public class ExamQuDetailVO {
      * 排序
      */
     private Integer sort;
+
+    /**
+     * 填空题用户作答内容（多空用|||分隔）
+     */
+    private String userAnswer;
 
 }

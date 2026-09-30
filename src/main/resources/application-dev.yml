@@ -1,5 +1,10 @@
 server:
   port: 8080 # 允许端口号
+  # 开启 gzip，显著减小 JSON 响应体积（小带宽场景优先）
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
 spring:
   main:
     # 关闭banner
@@ -8,30 +13,31 @@ spring:
     allow-circular-references: true
   # mysql配置
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/db_exam?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    url: jdbc:mysql://124.221.113.73:3306/db_exam?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     username: root
-    password: Aa112211
+    password: fjndhww198126
     driver-class-name: com.mysql.cj.jdbc.Driver
   # redis配置
   redis:
     database: 0
-    host: 127.0.0.1
+    host: 124.221.113.73
     port: 6379
-    # password:
+    password: Ma12TgYFOgSHtjoPhTK4d78oHbdsRZm6
     timeout: 10s
     lettuce: # Redis连接池配置
       pool:
-        # 连接池最大连接数 默认8 ，负数表示没有限制
-        max-active: 8
+        # 连接池最大连接数（Session + Token + 业务缓存共用）
+        max-active: 16
         # 连接池最大阻塞等待时间（使用负值表示没有限制） 默认-1
         max-wait: -1
-        # 连接池中的最大空闲连接 默认8
+        # 连接池中的最大空闲连接
         max-idle: 8
         # 连接池中的最小空闲连接 默认0
         min-idle: 0
   servlet:
     multipart:
-      max-file-size: 5MB
+      max-file-size: 10MB
+      max-request-size: 12MB
 #MybatisPlus配置
 mybatis-plus:
   global-config:
@@ -61,7 +67,8 @@ oss:
 
 # Minio本地文件存储服务
 minio:
-  endpoint: http://127.0.0.1:9000 # minio服务地址
+  # endpoint: http://127.0.0.1:9000 # minio服务地址
+  endpoint: http://124.221.113.73:9000 # minio服务地址
   accesskey: admin # minio用户名
   secretKey: Aa112211 # minio密码
   bucket: online-exam #桶名
@@ -112,6 +119,16 @@ online-exam:
   login:
     captcha:
       enabled: true #是否启用验证码登录
+
+# 微信小程序配置
+wx:
+  miniprogram:
+    appid: wx617393d89da0b466  # 请替换为实际的小程序appid
+    secret: 50d29e1344bdf28d81b3c877f83fcf89  # 请替换为实际的小程序secret
+    login:
+      enabled: true
+      auto-register: false  # 是否允许自动注册
+
 system:
   register:
     enabled: true  # 控制是否开放注册功能

@@ -27,7 +27,9 @@ public class FileServiceImpl implements IFileService {
 
     @SneakyThrows(IOException.class)
     @Override
-    public Result<String> uploadImage(MultipartFile file) {
+    public Result<String> 
+    uploadImage(MultipartFile file) {
+
         if (!fileService.isImage(Objects.requireNonNull(file.getOriginalFilename()))) {
             throw new ServiceRuntimeException("上传头像到文件不是常用图片格式(png、jpg、jpeg、bmp)");
         }
@@ -39,6 +41,22 @@ public class FileServiceImpl implements IFileService {
             throw new ServiceRuntimeException("图片上传失败，url地址没有返回");
         }
         return Result.success("图片上传成功", url);
+    }
+
+    @SneakyThrows(IOException.class)
+    @Override
+    public Result<String> uploadAudio(MultipartFile file) {
+        if (!fileService.isAudio(Objects.requireNonNull(file.getOriginalFilename()))) {
+            throw new ServiceRuntimeException("音频仅支持mp3格式");
+        }
+        if (fileService.isAudioOverSize(file)) {
+            throw new ServiceRuntimeException("音频大小不能超过10MB");
+        }
+        String url = fileService.upload(file);
+        if (StringUtils.isBlank(url)) {
+            throw new ServiceRuntimeException("音频上传失败,url地址没有返回");
+        }
+        return Result.success("音频上传成功", url);
     }
 
 }

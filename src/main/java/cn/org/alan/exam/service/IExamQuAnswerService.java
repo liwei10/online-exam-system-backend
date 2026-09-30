@@ -1,13 +1,10 @@
 package cn.org.alan.exam.service;
 
+import com.baomidou.mybatisplus.extension.service.IService;
+
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.model.entity.ExamQuAnswer;
-import cn.org.alan.exam.model.vo.exam.ExamQuAnswerExtVO;
 import cn.org.alan.exam.model.vo.score.QuestionAnalyseVO;
-import com.baomidou.mybatisplus.extension.service.IService;
-import org.apache.poi.ss.formula.functions.T;
-
-import java.util.List;
 
 /**
  * <p>

@@ -14,6 +14,10 @@ import java.util.List;
 public class ExamRecordDetailVO {
     // 1、题干 2、选项 3、自己的答案 4、正确的答案 5、是否正确 6、试题分析
     /**
+     * 试题ID
+     */
+    private Integer questionId;
+    /**
      * 题干
      */
     private String title;
@@ -21,6 +25,10 @@ public class ExamRecordDetailVO {
      * 题干图片
      */
     private String image;
+    /**
+     * 题干音频
+     */
+    private String audio;
     /**
      * 选项
      */
@@ -45,5 +53,13 @@ public class ExamRecordDetailVO {
      * 试题类型
      */
     private Integer quType;
+    /**
+     * 难度 1-5
+     */
+    private Integer level;
+    /**
+     * 本试卷该题分值
+     */
+    private Integer score;
 
 }

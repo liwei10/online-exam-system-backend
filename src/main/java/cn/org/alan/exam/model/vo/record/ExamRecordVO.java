@@ -1,15 +1,14 @@
 package cn.org.alan.exam.model.vo.record;
 
-import cn.org.alan.exam.model.entity.Option;
+import java.time.LocalDateTime;
+
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.Data;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import lombok.Data;
 
 /**
  * @Author Alan
@@ -102,6 +101,21 @@ public class ExamRecordVO {
     private Integer saqScore;
 
     /**
+     * 填空题数量
+     */
+    private Integer fillCount;
+
+    /**
+     * 填空题成绩
+     */
+    private Integer fillScore;
+
+    /**
+     * 填空题是否二次人工阅卷 0否 1是
+     */
+    private Integer fillNeedMark;
+
+    /**
      * 开始时间     YYYY-MM-DD hh:mm:ss
      */
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
@@ -135,6 +149,14 @@ public class ExamRecordVO {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime limitTime;
 
+    /**
+     * 阅卷状态：-1无需阅卷 0待阅卷 1已阅卷
+     */
+    private Integer whetherMark;
 
+    /**
+     * 考试状态：0考试中 1已交卷
+     */
+    private Integer state;
 
 }

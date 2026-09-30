@@ -79,4 +79,10 @@ public class ExamQuAnswer implements Serializable {
      */
     @ApiModelProperty("ai评分原因")
     private String aiReason;
+
+    /**
+     * 填空题按空自动实得分
+     */
+    @ApiModelProperty("填空题实得分")
+    private Integer earnedScore;
 }

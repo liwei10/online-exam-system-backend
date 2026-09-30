@@ -1,5 +1,6 @@
 package cn.org.alan.exam.service.impl;
 
+import cn.org.alan.exam.common.cache.QuContentCacheService;
 import cn.org.alan.exam.common.exception.ServiceRuntimeException;
 import cn.org.alan.exam.common.result.Result;
 import cn.org.alan.exam.converter.ExerciseConverter;
@@ -7,6 +8,7 @@ import cn.org.alan.exam.converter.RecordConverter;
 import cn.org.alan.exam.mapper.*;
 import cn.org.alan.exam.model.entity.*;
 import cn.org.alan.exam.model.form.exercise.ExerciseFillAnswerFrom;
+import cn.org.alan.exam.model.vo.question.QuContentShell;
 import cn.org.alan.exam.model.vo.question.QuestionVO;
 import cn.org.alan.exam.model.vo.exercise.AnswerInfoVO;
 import cn.org.alan.exam.model.vo.exercise.QuestionSheetVO;
@@ -16,9 +18,11 @@ import cn.org.alan.exam.model.vo.record.ExerciseRecordDetailVO;
 import cn.org.alan.exam.model.vo.record.ExerciseRecordVO;
 import cn.org.alan.exam.service.IExerciseRecordService;
 import cn.org.alan.exam.service.IOptionService;
+import cn.org.alan.exam.utils.BlankPlaceholderUtil;
 import cn.org.alan.exam.utils.SecurityUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
@@ -60,10 +64,17 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     private ExerciseConverter exerciseConverter;
     @Resource
     private ExerciseRecordMapper exerciseRecordMapper;
+    @Resource
+    private GradeExerciseMapper gradeExerciseMapper;
+    @Resource
+    private UserGradeMapper userGradeMapper;
+    @Resource
+    private QuContentCacheService quContentCacheService;
 
 
     @Override
     public Result<List<QuestionSheetVO>> getQuestionSheet(Integer repoId, Integer quType) {
+        assertStudentCanExerciseRepo(repoId);
         List<QuestionSheetVO> list = questionMapper.selectQuestionSheet(repoId, quType, SecurityUtil.getUserId());
         return Result.success("获取获取试题答题卡列表成功", list);
     }
@@ -94,155 +105,154 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
 
     @Override
     public Result<List<ExamRecordDetailVO>> getExamRecordDetail(Integer examId, Integer userId) {
-        if(userId==null){
-            userId =SecurityUtil.getUserId();
+        if (userId == null) {
+            userId = SecurityUtil.getUserId();
         }
-        // 1、题干 2、选项 3、自己的答案 4、正确的答案 5、是否正确 6、试题分析
         List<ExamRecordDetailVO> examRecordDetailVOS = new ArrayList<>();
-        // 查询该考试的试题
         LambdaQueryWrapper<ExamQuestion> examQuestionWrapper = new LambdaQueryWrapper<>();
         examQuestionWrapper.eq(ExamQuestion::getExamId, examId)
                 .orderByAsc(ExamQuestion::getSort);
         List<ExamQuestion> examQuestions = examQuestionMapper.selectList(examQuestionWrapper);
+        if (examQuestions == null || examQuestions.isEmpty()) {
+            return Result.success("查询考试的信息成功", examRecordDetailVOS);
+        }
         List<Integer> quIds = examQuestions.stream()
                 .map(ExamQuestion::getQuestionId)
                 .collect(Collectors.toList());
-        // 查询题干列表
         List<Question> questions = questionMapper.selectBatchIds(quIds);
-        for (Question temp : questions) {
-            // 创建返回对象
+        Map<Integer, Question> questionMap = questions.stream()
+                .collect(Collectors.toMap(Question::getId, q -> q, (a, b) -> a));
+
+        // 批量查选项，避免按题循环查询
+        List<Option> allOptions = optionMapper.selectList(new LambdaQueryWrapper<Option>()
+                .in(Option::getQuId, quIds)
+                .orderByAsc(Option::getSort));
+        Map<Integer, List<Option>> optionsByQuId = allOptions.stream()
+                .collect(Collectors.groupingBy(Option::getQuId, LinkedHashMap::new, Collectors.toList()));
+        Map<Integer, Option> optionById = allOptions.stream()
+                .collect(Collectors.toMap(Option::getId, o -> o, (a, b) -> a));
+
+        // 批量查该考生作答
+        List<ExamQuAnswer> answerList = examQuAnswerMapper.selectList(new LambdaQueryWrapper<ExamQuAnswer>()
+                .eq(ExamQuAnswer::getExamId, examId)
+                .eq(ExamQuAnswer::getUserId, userId)
+                .in(ExamQuAnswer::getQuestionId, quIds));
+        Map<Integer, ExamQuAnswer> answerByQuId = answerList.stream()
+                .collect(Collectors.toMap(ExamQuAnswer::getQuestionId, a -> a, (a, b) -> a));
+
+        for (ExamQuestion examQuestion : examQuestions) {
+            Question temp = questionMap.get(examQuestion.getQuestionId());
+            if (temp == null) {
+                continue;
+            }
             ExamRecordDetailVO examRecordDetailVO = new ExamRecordDetailVO();
-            // 设置标题
+            examRecordDetailVO.setQuestionId(temp.getId());
             examRecordDetailVO.setImage(temp.getImage());
+            examRecordDetailVO.setAudio(temp.getAudio());
             examRecordDetailVO.setTitle(temp.getContent());
             examRecordDetailVO.setQuType(temp.getQuType());
-            // 设置分析
+            examRecordDetailVO.setLevel(temp.getLevel());
+            examRecordDetailVO.setScore(examQuestion.getScore());
             examRecordDetailVO.setAnalyse(temp.getAnalysis());
-            // 查询试题选项
-            LambdaQueryWrapper<Option> optionWrapper = new LambdaQueryWrapper<>();
-            optionWrapper.eq(Option::getQuId, temp.getId());
-            List<Option> options = optionMapper.selectList(optionWrapper);
-            if (temp.getQuType() == 4) {
+
+            List<Option> options = optionsByQuId.getOrDefault(temp.getId(), Collections.emptyList());
+            Integer quType = temp.getQuType();
+
+            if (quType != null && quType == 4) {
                 examRecordDetailVO.setOption(null);
+                if (!options.isEmpty()) {
+                    examRecordDetailVO.setRightOption(options.get(0).getContent());
+                }
+            } else if (quType != null && quType == 5) {
+                examRecordDetailVO.setOption(options);
+                if (!options.isEmpty()) {
+                    examRecordDetailVO.setRightOption(options.stream()
+                            .map(Option::getContent)
+                            .collect(Collectors.joining(BlankPlaceholderUtil.ANSWER_DELIMITER)));
+                }
             } else {
                 examRecordDetailVO.setOption(options);
-            }
-
-            // 查询试题类型
-            LambdaQueryWrapper<Question> QuWrapper = new LambdaQueryWrapper<>();
-            QuWrapper.eq(Question::getId, temp.getId());
-            Question qu = questionMapper.selectOne(QuWrapper);
-            Integer quType = qu.getQuType();
-            // 设置正确答案
-            LambdaQueryWrapper<Option> opWrapper = new LambdaQueryWrapper<>();
-            opWrapper.eq(Option::getQuId, temp.getId());
-            List<Option> opList = optionMapper.selectList(opWrapper);
-
-            if (temp.getQuType() == 4 && opList.size() > 0) {
-                examRecordDetailVO.setRightOption(opList.get(0).getContent());
-            } else {
-                String current = "";
-                ArrayList<Integer> strings = new ArrayList<>();
-                for (Option temp1 : options) {
-                    if (temp1.getIsRight() == 1) {
-                        strings.add(temp1.getSort());
+                List<Integer> rightSorts = new ArrayList<>();
+                for (Option opt : options) {
+                    if (opt.getIsRight() != null && opt.getIsRight() == 1) {
+                        rightSorts.add(opt.getSort());
                     }
                 }
-                List<String> stringList = strings.stream().map(String::valueOf).collect(Collectors.toList());
-                String result = String.join(",", stringList);
-
-                examRecordDetailVO.setRightOption(result);
+                examRecordDetailVO.setRightOption(
+                        rightSorts.stream().map(String::valueOf).collect(Collectors.joining(","))
+                );
             }
-            // 设置是否正确
-            LambdaQueryWrapper<ExamQuAnswer> examQuAnswerWrapper = new LambdaQueryWrapper<>();
-            examQuAnswerWrapper.eq(ExamQuAnswer::getUserId, userId)
-                    .eq(ExamQuAnswer::getExamId, examId)
-                    .eq(ExamQuAnswer::getQuestionId, temp.getId());
-            ExamQuAnswer examQuAnswer = examQuAnswerMapper.selectOne(examQuAnswerWrapper);
-            // 如果某题没有作答
+
+            ExamQuAnswer examQuAnswer = answerByQuId.get(temp.getId());
             if (examQuAnswer == null) {
                 examRecordDetailVO.setMyOption(null);
                 examRecordDetailVO.setIsRight(-1);
                 examRecordDetailVOS.add(examRecordDetailVO);
                 continue;
             }
+            if (quType == null) {
+                examRecordDetailVOS.add(examRecordDetailVO);
+                continue;
+            }
             switch (quType) {
                 case 1:
-                    // 设置自己的选项
-                    LambdaQueryWrapper<Option> optionLambdaQueryWrapper1 = new LambdaQueryWrapper<>();
-                    optionLambdaQueryWrapper1.eq(Option::getId, examQuAnswer.getAnswerId());
-                    Option op1 = optionMapper.selectOne(optionLambdaQueryWrapper1);
-                    examRecordDetailVO.setMyOption(Integer.toString(op1.getSort()));
-                    // 设置是否正确
-                    Option byId1 = optionService.getById(examQuAnswer.getAnswerId());
-                    if (byId1.getIsRight() == 1) {
-                        examRecordDetailVO.setIsRight(1);
-                    } else {
+                case 3: {
+                    if (StringUtils.isBlank(examQuAnswer.getAnswerId())) {
+                        examRecordDetailVO.setMyOption(null);
                         examRecordDetailVO.setIsRight(0);
+                        break;
                     }
+                    Option op = optionById.get(Integer.valueOf(examQuAnswer.getAnswerId()));
+                    if (op == null) {
+                        examRecordDetailVO.setMyOption(null);
+                        examRecordDetailVO.setIsRight(0);
+                        break;
+                    }
+                    examRecordDetailVO.setMyOption(Integer.toString(op.getSort()));
+                    examRecordDetailVO.setIsRight(op.getIsRight() != null && op.getIsRight() == 1 ? 1 : 0);
                     break;
-                case 2:
-                    // 将回答 id 解析为列表
-                    String answerId = examQuAnswer.getAnswerId();
-                    List<Integer> opIds = Arrays.stream(answerId.split(","))
+                }
+                case 2: {
+                    if (StringUtils.isBlank(examQuAnswer.getAnswerId())) {
+                        examRecordDetailVO.setMyOption(null);
+                        examRecordDetailVO.setIsRight(0);
+                        break;
+                    }
+                    List<Integer> opIds = Arrays.stream(examQuAnswer.getAnswerId().split(","))
+                            .map(String::trim)
+                            .filter(StringUtils::isNotBlank)
                             .map(Integer::parseInt)
                             .collect(Collectors.toList());
-                    // 添加选项顺序
                     List<Integer> sorts = new ArrayList<>();
                     for (Integer opId : opIds) {
-                        LambdaQueryWrapper<Option> optionLambdaQueryWrapper2 = new LambdaQueryWrapper<>();
-                        optionLambdaQueryWrapper2.eq(Option::getId, opId);
-                        Option option = optionMapper.selectOne(optionLambdaQueryWrapper2);
-                        sorts.add(option.getSort());
-                    }
-                    // 设置自己选的选项，选项为顺序 1 为 A，2 为 B...
-                    List<String> shortList = sorts.stream().map(String::valueOf).collect(Collectors.toList());
-                    String myOption = String.join(",", shortList);
-                    examRecordDetailVO.setMyOption(myOption);
-                    // 查找正确答案
-                    LambdaQueryWrapper<Option> optionWrapper1 = new LambdaQueryWrapper<>();
-                    optionWrapper1.eq(Option::getIsRight, 1)
-                            .eq(Option::getQuId, temp.getId());
-                    List<Option> examQuAnswers = optionMapper.selectList(optionWrapper1);
-                    // 判断是否正确
-                    examRecordDetailVO.setIsRight(1);
-                    for (Option temp1 : examQuAnswers) {
-                        boolean contains = opIds.contains(temp1.getId());
-                        if (!contains) {
-                            // 只要有一个答案不是正确的则判断为错误
-                            examRecordDetailVO.setIsRight(0);
-                            break;
+                        Option option = optionById.get(opId);
+                        if (option != null && option.getSort() != null) {
+                            sorts.add(option.getSort());
                         }
                     }
+                    examRecordDetailVO.setMyOption(sorts.stream().map(String::valueOf).collect(Collectors.joining(",")));
+                    List<Option> rightOptions = options.stream()
+                            .filter(o -> o.getIsRight() != null && o.getIsRight() == 1)
+                            .collect(Collectors.toList());
+                    boolean allMatch = !rightOptions.isEmpty()
+                            && rightOptions.size() == opIds.size()
+                            && rightOptions.stream().allMatch(r -> opIds.contains(r.getId()));
+                    examRecordDetailVO.setIsRight(allMatch ? 1 : 0);
                     break;
-                case 3:
-                    // 查询自己的的选项
-                    LambdaQueryWrapper<Option> optionLambdaQueryWrapper3 = new LambdaQueryWrapper<>();
-                    optionLambdaQueryWrapper3.eq(Option::getId, examQuAnswer.getAnswerId());
-                    Option op3 = optionMapper.selectOne(optionLambdaQueryWrapper3);
-                    examRecordDetailVO.setMyOption(Integer.toString(op3.getSort()));
-                    // 查询是否正确
-                    Option byId3 = optionService.getById(examQuAnswer.getAnswerId());
-                    if (byId3.getIsRight() == 1) {
-                        examRecordDetailVO.setIsRight(1);
-                    } else {
-                        examRecordDetailVO.setIsRight(0);
-                    }
-                    break;
+                }
                 case 4:
                     examRecordDetailVO.setMyOption(examQuAnswer.getAnswerContent());
                     examRecordDetailVO.setIsRight(-1);
+                    break;
+                case 5:
+                    examRecordDetailVO.setMyOption(examQuAnswer.getAnswerContent());
+                    examRecordDetailVO.setIsRight(examQuAnswer.getIsRight() == null ? -1 : examQuAnswer.getIsRight());
                     break;
                 default:
                     break;
             }
             examRecordDetailVOS.add(examRecordDetailVO);
-
         }
-        if (examRecordDetailVOS==null){
-            throw new ServiceRuntimeException("查询考试的信息失败");
-        }
-
         return Result.success("查询考试的信息成功", examRecordDetailVOS);
     }
 
@@ -269,6 +279,7 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         for (Question temp : questions1) {
             ExerciseRecordDetailVO exerciseRecordDetailVO = new ExerciseRecordDetailVO();
             exerciseRecordDetailVO.setImage(temp.getImage());
+            exerciseRecordDetailVO.setAudio(temp.getAudio());
             exerciseRecordDetailVO.setTitle(temp.getContent());
             exerciseRecordDetailVO.setAnalyse(temp.getAnalysis());
             exerciseRecordDetailVO.setQuType(temp.getQuType());
@@ -276,6 +287,7 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
             LambdaQueryWrapper<Option> optionWrapper = new LambdaQueryWrapper<>();
             optionWrapper.eq(Option::getQuId, temp.getId());
             List<Option> options = optionMapper.selectList(optionWrapper);
+            options.sort(Comparator.comparing(option -> option.getSort() == null ? 0 : option.getSort()));
             if (temp.getQuType() == 4) {
                 exerciseRecordDetailVO.setOption(null);
             } else {
@@ -284,7 +296,13 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
 
             if (temp.getQuType() == 4 && options.size() > 0) {
                 exerciseRecordDetailVO.setRightOption(options.get(0).getContent());
+            } else if (temp.getQuType() == 5 && options.size() > 0) {
+                // 填空题：返回答案内容，用 ||| 分隔
+                exerciseRecordDetailVO.setRightOption(options.stream()
+                        .map(Option::getContent)
+                        .collect(Collectors.joining(BlankPlaceholderUtil.ANSWER_DELIMITER)));
             } else {
+                // 客观题：返回选项索引
                 String current = "";
                 ArrayList<Integer> strings = new ArrayList<>();
                 for (Option temp1 : options) {
@@ -339,6 +357,7 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
                         Option option = optionMapper.selectOne(optionLambdaQueryWrapper2);
                         sorts.add(option.getSort());
                     }
+                    sorts.sort(Comparator.naturalOrder());
                     // 设置自己选的选项，选项为顺序 1为A，2为B...
                     List<String> shortList = sorts.stream().map(String::valueOf).collect(Collectors.toList());
                     String myOption = String.join(",", shortList);
@@ -377,6 +396,11 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
                     exerciseRecordDetailVO.setMyOption(null);
                     exerciseRecordDetailVO.setIsRight(-1);
                     break;
+                case 5:
+                    // 填空题：用户答案存储在 answer 字段中
+                    exerciseRecordDetailVO.setMyOption(exerciseRecord.getAnswer());
+                    exerciseRecordDetailVO.setIsRight(exerciseRecord.getIsRight());
+                    break;
                 default:
                     break;
             }
@@ -388,31 +412,55 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
     @Override
     @Transactional
     public Result<QuestionVO> fillAnswer(ExerciseFillAnswerFrom exerciseFillAnswerFrom) {
+        assertStudentCanExerciseRepo(exerciseFillAnswerFrom.getRepoId());
         ExerciseRecord exerciseRecord = exerciseConverter.fromToEntity(exerciseFillAnswerFrom);
+        if (exerciseRecord.getAnswer() == null) {
+            exerciseRecord.setAnswer("");
+        }
         //默认用户回答正确
         boolean flag = true;
         exerciseRecord.setIsRight(1);
 
-        //对客观题做题正确与否校验
-        if (exerciseFillAnswerFrom.getQuType() != 4) {
-            List<Integer> options = Arrays.stream(exerciseRecord.getAnswer().split(","))
-                    .map(Integer::parseInt).collect(java.util.stream.Collectors.toList());
-            List<Integer> rightOptions = new ArrayList<>();
-            optionMapper.selectAllByQuestionId(exerciseRecord.getQuestionId()).forEach(option -> {
-                if (option.getIsRight() == 1) {
-                    rightOptions.add(option.getId());
-                }
-            });
-            if (options.size() != rightOptions.size()) {
+        Integer quType = exerciseFillAnswerFrom.getQuType();
+        //对客观题做题正确与否校验（未作答视为错误）；简答跳过；填空按空比对
+        if (quType != null && quType == 4) {
+            // 简答题不自动判分
+        } else if (quType != null && quType == 5) {
+            List<Option> fillOptions = optionMapper.selectAllByQuestionId(exerciseRecord.getQuestionId());
+            fillOptions.sort(Comparator.comparing(o -> o.getSort() == null ? 0 : o.getSort()));
+            List<String> standards = fillOptions.stream().map(Option::getContent).collect(Collectors.toList());
+            List<String> userAnswers = BlankPlaceholderUtil.splitAnswers(exerciseRecord.getAnswer());
+            int correct = BlankPlaceholderUtil.countCorrect(userAnswers, standards);
+            flag = !standards.isEmpty() && correct == standards.size();
+            exerciseRecord.setIsRight(flag ? 1 : 0);
+        } else {
+            String answer = exerciseRecord.getAnswer();
+            if (StringUtils.isBlank(answer)) {
                 flag = false;
+                exerciseRecord.setIsRight(0);
             } else {
-                for (Integer option : options) {
-                    if (!rightOptions.contains(option)) {
-                        flag = false;
-                        exerciseRecord.setIsRight(0);
-                        break;
+                List<Integer> options = Arrays.stream(answer.split(","))
+                        .map(String::trim)
+                        .filter(StringUtils::isNotBlank)
+                        .map(Integer::parseInt)
+                        .collect(java.util.stream.Collectors.toList());
+                List<Integer> rightOptions = new ArrayList<>();
+                optionMapper.selectAllByQuestionId(exerciseRecord.getQuestionId()).forEach(option -> {
+                    if (option.getIsRight() == 1) {
+                        rightOptions.add(option.getId());
+                    }
+                });
+                if (options.isEmpty() || options.size() != rightOptions.size()) {
+                    flag = false;
+                } else {
+                    for (Integer option : options) {
+                        if (!rightOptions.contains(option)) {
+                            flag = false;
+                            break;
+                        }
                     }
                 }
+                exerciseRecord.setIsRight(flag ? 1 : 0);
             }
         }
         if (flag) {
@@ -468,8 +516,9 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
         QuestionVO questionVO = questionMapper.selectSingle(exerciseRecord.getQuestionId());
 
         //针对不同题型做出不同响应
-        //主观题响应
-        if (exerciseRecord.getQuestionType() == 4) {
+        //主观题/填空题：返回含标准答案的试题信息供复习
+        if (exerciseRecord.getQuestionType() != null
+                && (exerciseRecord.getQuestionType() == 4 || exerciseRecord.getQuestionType() == 5)) {
             return Result.success(null, questionVO);
         }
 
@@ -478,12 +527,18 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
 
     @Override
     public Result<QuestionVO> getSingle(Integer id) {
-        QuestionVO questionVO = questionMapper.selectDetail(id);
+        QuContentShell shell = quContentCacheService.getShell(id);
+        if (shell == null || shell.getRepoId() == null) {
+            throw new ServiceRuntimeException("试题不存在");
+        }
+        assertStudentCanExerciseRepo(shell.getRepoId());
+        QuestionVO questionVO = quContentCacheService.toQuestionVO(shell);
         return Result.success("查询单题成功", questionVO);
     }
 
     @Override
     public Result<AnswerInfoVO> getAnswerInfo(Integer repoId, Integer quId) {
+        assertStudentCanExerciseRepo(repoId);
         QuestionVO questionVO = questionMapper.selectSingle(quId);
         AnswerInfoVO answerInfoVO = exerciseConverter.quVOToAnswerInfoVO(questionVO);
         LambdaQueryWrapper<ExerciseRecord> exerciseRecordLambdaQueryWrapper = new LambdaQueryWrapper<ExerciseRecord>()
@@ -491,9 +546,29 @@ public class ExerciseRecordServiceImpl extends ServiceImpl<ExerciseRecordMapper,
                 .eq(ExerciseRecord::getQuestionId, quId)
                 .eq(ExerciseRecord::getUserId, SecurityUtil.getUserId());
         ExerciseRecord exerciseRecord = exerciseRecordMapper.selectOne(exerciseRecordLambdaQueryWrapper);
+        if (exerciseRecord == null) {
+            return Result.success("未作答", answerInfoVO);
+        }
         answerInfoVO.setAnswerContent(exerciseRecord.getAnswer());
         return exerciseRecord.getIsRight() == 1 ?
                 Result.success("回答正确", answerInfoVO) : Result.success("回答错误", answerInfoVO);
 
+    }
+
+    /**
+     * 校验当前学生所在班级是否绑定了该题库，且题库已开启刷题
+     */
+    private void assertStudentCanExerciseRepo(Integer repoId) {
+        if (repoId == null) {
+            throw new ServiceRuntimeException("题库不存在");
+        }
+        List<Integer> gradeIds = userGradeMapper.getStudentGradeIdList(SecurityUtil.getUserId());
+        if (gradeIds == null || gradeIds.isEmpty()) {
+            throw new ServiceRuntimeException("请先加入班级后再刷题");
+        }
+        int count = gradeExerciseMapper.countStudentRepoAccess(repoId, gradeIds);
+        if (count < 1) {
+            throw new ServiceRuntimeException("无权刷该题库");
+        }
     }
 }

@@ -1,17 +1,16 @@
 package cn.org.alan.exam.model.form.question;
 
-import cn.org.alan.exam.common.group.QuestionGroup;
-import cn.org.alan.exam.model.entity.Option;
-
-import lombok.Data;
+import java.time.LocalDateTime;
+import java.util.List;
 
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
+
+import cn.org.alan.exam.common.group.QuestionGroup;
+import cn.org.alan.exam.model.entity.Option;
+import lombok.Data;
 
 /**
  * 试卷请求体
@@ -29,14 +28,19 @@ public class QuestionFrom {
      * 试题类型
      */
     @NotNull(message = "试题类型(quType)不能为空", groups = QuestionGroup.QuestionAddGroup.class)
-    @Min(value = 1, message = "试题类型(quType)只能是：1单选2多选3判断4简答", groups = QuestionGroup.QuestionAddGroup.class)
-    @Max(value = 4, message = "试题类型(quType)只能是：1单选2多选3判断4简答", groups = QuestionGroup.QuestionAddGroup.class)
+    @Min(value = 1, message = "试题类型(quType)只能是：1单选2多选3判断4简答5填空", groups = QuestionGroup.QuestionAddGroup.class)
+    @Max(value = 5, message = "试题类型(quType)只能是：1单选2多选3判断4简答5填空", groups = QuestionGroup.QuestionAddGroup.class)
     private Integer quType;
 
     /**
      * 试题图片
      */
     private String image;
+
+    /**
+     * 试题音频，JSON数组字符串，兼容单个URL
+     */
+    private String audio;
     private String analysis;
 
     /**
@@ -55,6 +59,13 @@ public class QuestionFrom {
      */
     @NotNull(message = "题库id(repoId)不能为空", groups = QuestionGroup.QuestionAddGroup.class)
     private Integer repoId;
+
+    /**
+     * 难度等级 1-5
+     */
+    @Min(value = 1, message = "难度最少1星", groups = QuestionGroup.QuestionAddGroup.class)
+    @Max(value = 5, message = "难度最多5星", groups = QuestionGroup.QuestionAddGroup.class)
+    private Integer level;
 
     /**
      * 选项列表

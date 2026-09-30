@@ -20,6 +20,11 @@ public class BookOneQuVO {
     private String image;
 
     /**
+     * 音频
+     */
+    private String audio;
+
+    /**
      * 题目内容
      */
     private String content;

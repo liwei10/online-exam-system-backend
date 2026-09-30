@@ -1,12 +1,15 @@
 package cn.org.alan.exam.model.form.exam;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import lombok.Data;
+import java.time.LocalDateTime;
+
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+
 import org.springframework.format.annotation.DateTimeFormat;
 
-import javax.validation.constraints.*;
-import java.time.LocalDateTime;
+import lombok.Data;
 
 /**
  * 试卷更新请求体
@@ -37,12 +40,11 @@ public class ExamUpdateForm {
     private Integer passedScore;
 
     // 开始时间
-    @DateTimeFormat(pattern = "yyyy-MM-dd hh:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;
 
     // 结束时间
-    @Future(message = "结束时间必须是一个必须是一个将来的日期")
-    @DateTimeFormat(pattern = "yyyy-MM-dd hh:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime endTime;
 
     // 考试班级
@@ -71,4 +73,11 @@ public class ExamUpdateForm {
     @NotNull(message = "简答题分数不能为空")
     @Min(value = 0)
     private Integer saqScore;
+
+    // 填空题分数
+    @Min(value = 0)
+    private Integer fillScore;
+
+    // 填空题是否二次人工阅卷 0否 1是
+    private Integer fillNeedMark;
 }

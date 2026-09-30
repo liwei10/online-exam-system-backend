@@ -53,4 +53,12 @@ public interface NoticeMapper extends BaseMapper<Notice> {
      */
     List<NoticeVO> getNotice(Integer userId, String title);
 
+    /**
+     * 公告详情（含全文 content）
+     *
+     * @param noticeId 公告ID
+     * @return 公告详情
+     */
+    NoticeVO getNoticeDetail(Integer noticeId);
+
 }
